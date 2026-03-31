@@ -27,7 +27,7 @@ public class TSSPCMod {
 
     @PreInit // 🌟 EventHandler ではなく PreInit
     public void preInit(FMLPreInitializationEvent event) {
-        computerBlock = new ComputerBlock(2500, Material.iron)
+        computerBlock = new ComputerBlock(500, Material.rock)
                 .setUnlocalizedName("pc_block")
                 .setCreativeTab(CreativeTabs.tabDecorations);
 
