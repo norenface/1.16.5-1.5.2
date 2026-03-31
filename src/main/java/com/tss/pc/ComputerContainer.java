@@ -1,0 +1,352 @@
+package com.tss.pc;
+
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.InventoryPlayer;
+import net.minecraft.inventory.Container;
+import net.minecraft.inventory.IInventory;
+import net.minecraft.inventory.InventoryBasic;
+import net.minecraft.inventory.Slot;
+import net.minecraft.item.ItemStack;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList; //
+import java.util.*;
+
+public class ComputerContainer extends Container {
+    private ComputerBlockEntity tileEntity;
+    private final EntityPlayer player;
+
+    // スクロール・フィルタ状態 (Screenから更新される)
+    public float scrollPos = 0.0F;
+    public float favScrollPos = 0.0F;
+    public String searchText = "";
+    public String selectedMod = "all";
+    public int selectedTabIndex = 0;
+    private InventoryBasic storageView = new InventoryBasic("StorageView", false, 45);
+    private InventoryBasic favoriteView = new InventoryBasic("FavoriteView", false, 45);
+    // コンテナにお気に入り用のスクロール変数がない場合は追加
+    public float favoriteScrollPos = 0.0F;
+
+    // メインストレージの最大行数
+    public int getMaxMainRows() {
+        return (int) Math.ceil(tileEntity.getBulkStorage().getFilteredItemList(selectedMod, searchText).size() / 9.0);
+    }
+
+    // プレイヤーが持っているタブの総数
+    public int getTotalTabCount() {
+        return tileEntity.getTabsForPlayer(player).size();
+    }
+    public ComputerContainer(InventoryPlayer invPlayer, ComputerBlockEntity te) {
+        // 1. 基本情報のセット
+        this.tileEntity = te;
+        this.player = invPlayer.player;
+
+        // 2. 仮想インベントリの初期化（nullチェックではなく毎回新規作成でOKです）
+        this.storageView = new InventoryBasic("StorageView", false, 45);
+        this.favoriteView = new InventoryBasic("FavoriteView", false, 45);
+
+        // 1. メインストレージ表示 (0-44)
+        for (int i = 0; i < 45; i++) {
+            this.addSlotToContainer(new SlotReadOnly(storageView, i, 8 + (i % 9) * 18, 26 + (i / 9) * 18));
+        }
+
+        // 2. お気に入り (45-89)
+        for (int i = 0; i < 45; i++) {
+            this.addSlotToContainer(new SlotReadOnly(favoriteView, i, 192 + (i % 5) * 18, 26 + (i / 5) * 18));
+        }
+
+        // 3. プレイヤーインベントリ (90-116)
+        for (int i = 0; i < 27; i++) {
+            this.addSlotToContainer(new Slot(invPlayer, i + 9, 8 + (i % 9) * 18, 140 + (i / 9) * 18));
+        }
+
+        // 4. ホットバー (117-125)
+        for (int i = 0; i < 9; i++) {
+            this.addSlotToContainer(new Slot(invPlayer, i, 8 + i * 18, 198));
+        }
+
+        // デバッグ用：スロットがいくつ登録されたかコンソールに出す
+        System.out.println("DEBUG: Container initialized. Total slots: " + this.inventorySlots.size());
+
+        // 🛡️ 転送処理等の設定
+        if (this.tileEntity != null && this.tileEntity.getBulkStorage() != null) {
+            this.tileEntity.getBulkStorage().setOnContentsChanged(new Runnable() {
+                @Override
+                public void run() {
+                    updateVisibleSlots();
+                }
+            });
+        }
+        // コンストラクタの最後の } の直前に追加
+        System.out.println("=== CONTAINER DEBUG START ===");
+        System.out.println("Side: " + (this.player.worldObj.isRemote ? "CLIENT" : "SERVER"));
+        System.out.println("Total Registered Slots: " + this.inventorySlots.size());
+        for (int i = 0; i < this.inventorySlots.size(); i++) {
+            Slot s = (Slot)this.inventorySlots.get(i);
+            // 110番目のスロットがどこを指しているか確認
+            if (i == 110) System.out.println("SLOT 110: " + s.inventory.getInvName());
+        }
+        System.out.println("=== CONTAINER DEBUG END ===");
+        // 最初の表示を更新
+        updateVisibleSlots();
+    }
+    // 🌟 最小限の追加：Screenからの状態（スクロール等）を同期するメソッド
+    public void updateState(float scroll, float favScroll, String search, String mod, int tab) {
+        this.scrollPos = scroll;
+        this.favScrollPos = favScroll;
+        this.searchText = (search == null) ? "" : search;
+        this.selectedMod = (mod == null) ? "all" : mod;
+        this.selectedTabIndex = tab;
+        this.updateVisibleSlots();
+    }
+    public void updateVisibleSlots() {
+        if (tileEntity == null || tileEntity.getBulkStorage() == null) return;
+        BulkItemStorage storage = tileEntity.getBulkStorage();
+        List<ItemStack> filtered = storage.getFilteredItemList(selectedMod, searchText);
+
+        // --- 1. メインストレージ表示の更新 ---
+        int rowCount = (int) Math.ceil(filtered.size() / 9.0);
+        int startRow = Math.round(scrollPos * Math.max(0, rowCount - 5));
+
+        for (int i = 0; i < 45; i++) {
+            int index = (startRow * 9) + i;
+            if (index >= 0 && index < filtered.size()) {
+                ItemStack s = filtered.get(index).copy();
+                int realCount = storage.getItemCount(s);
+                if (s.stackTagCompound == null) s.stackTagCompound = new NBTTagCompound();
+                s.stackTagCompound.setInteger("RealCount", realCount);
+                s.stackSize = 1;
+                storageView.setInventorySlotContents(i, s);
+            } else {
+                storageView.setInventorySlotContents(i, null);
+            }
+        }
+
+        // --- 2. お気に入りスロット表示の更新 ---
+        List<ComputerBlockEntity.FavoriteTab> tabs = tileEntity.getTabsForPlayer(player);
+        if (selectedTabIndex >= 0 && selectedTabIndex < tabs.size()) {
+            ComputerBlockEntity.FavoriteTab currentTab = tabs.get(selectedTabIndex);
+
+            // 🌟 修正1：お気に入りの最大行数を計算（1行5スロット）
+            int favRowCount = (int) Math.ceil(currentTab.slots.size() / 5.0);
+            // 🌟 修正2：現在のスクロール位置から開始行を決定（表示は9行分 = 45スロット）
+            int startFavRow = Math.round(favScrollPos * Math.max(0, favRowCount - 9));
+
+            for (int i = 0; i < 45; i++) {
+                // 🌟 修正3：スクロール位置を考慮したデータ上のインデックス
+                int dataIndex = (startFavRow * 5) + i;
+
+                // 🌟 修正4：リストの範囲内かどうかをチェック（IndexOutOfBounds防止）
+                if (dataIndex >= 0 && dataIndex < currentTab.slots.size()) {
+                    ItemStack favItem = currentTab.slots.get(dataIndex);
+
+                    if (favItem != null) {
+                        ItemStack displayStack = favItem.copy();
+                        int realCount = storage.getItemCount(displayStack);
+
+                        if (displayStack.stackTagCompound == null) {
+                            displayStack.stackTagCompound = new NBTTagCompound();
+                        }
+                        displayStack.stackTagCompound.setInteger("RealCount", realCount);
+                        displayStack.stackSize = 1;
+
+                        this.favoriteView.setInventorySlotContents(i, displayStack);
+                    } else {
+                        this.favoriteView.setInventorySlotContents(i, null);
+                    }
+                } else {
+                    // 🌟 リストの範囲外（まだ行が追加されていない場所）は空にする
+                    this.favoriteView.setInventorySlotContents(i, null);
+                }
+            }
+        }
+    }
+    @Override
+    public boolean canInteractWith(EntityPlayer player) {
+        return true;
+    }
+    @Override
+    public ItemStack slotClick(int slotId, int button, int modifier, net.minecraft.entity.player.EntityPlayer player) {
+        // 🌟 'side' の定義を復活（デバッグ用）
+        String side = player.worldObj.isRemote ? "[CLIENT]" : "[SERVER]";
+        System.out.println(side + " Click: SlotID=" + slotId + ", Button=" + button + ", Mod=" + modifier);
+        // 範囲外ガード
+        if (slotId < 0 || slotId >= this.inventorySlots.size()) return null;
+
+        // --- 🌟 ストレージ表示スロット (0-44) ---
+        if (slotId >= 0 && slotId < 45) {
+            if (!player.worldObj.isRemote) {
+                // サーバー側
+                Slot slot = (Slot) this.inventorySlots.get(slotId);
+                if (slot != null && slot.getHasStack()) {
+                    System.out.println(side + " Processing Withdraw for: " + slot.getStack().getDisplayName());
+                    System.out.println(side + " Attempting Withdraw: Slot " + slotId);
+
+                    // 右クリックなら1個、それ以外なら最大スタック数
+                    int amount = (button == 1) ? 1 : slot.getStack().getMaxStackSize();
+
+                    // 実際の引き出し処理
+                    this.handleWithdraw(slotId, amount, player);
+
+                    // 🌟 サーバーからクライアントへ強制同期（これで画面に反映される）
+                    if (player instanceof EntityPlayerMP) {
+                        ((EntityPlayerMP) player).sendContainerToPlayer(this);
+                        System.out.println(side + " Sent Container update packet to player.");
+                    }
+                }
+            }
+            return null; // バニラの「アイテムを掴む」動作を防止
+        }
+
+        // --- 🌟 お気に入りスロット (45-89) ---
+        if (slotId >= 45 && slotId < 90) {
+            if (!player.worldObj.isRemote) {
+                // 🌟 修正：スクロール位置から「実際のデータの場所」を逆算する
+                List<ComputerBlockEntity.FavoriteTab> playerTabs = tileEntity.getTabsForPlayer(player);
+                if (playerTabs != null && !playerTabs.isEmpty()) {
+                    ComputerBlockEntity.FavoriteTab currentTab = playerTabs.get(Math.min(selectedTabIndex, playerTabs.size() - 1));
+
+                    // 現在の表示開始行を計算（updateVisibleSlotsと同じロジック）
+                    int favRowCount = (int) Math.ceil(currentTab.slots.size() / 5.0);
+                    int startFavRow = Math.round(favScrollPos * Math.max(0, favRowCount - 9));
+
+                    // 🌟 実際のインデックス = (開始行 * 5列) + (クリックされたスロットの相対ID)
+                    int actualFavIndex = (startFavRow * 5) + (slotId - 45);
+
+                    ItemStack mouseStack = player.inventory.getItemStack();
+
+                    if (mouseStack != null) {
+                        // --- 登録処理 ---
+                        ItemStack favStack = mouseStack.copy();
+                        favStack.stackSize = 1;
+
+                        // リストのサイズ調整（actualFavIndexを使う）
+                        while (actualFavIndex >= currentTab.slots.size()) currentTab.slots.add(null);
+                        currentTab.slots.set(actualFavIndex, favStack);
+
+                        FavoriteConfig.saveAll(tileEntity.getAllPlayerTabs());
+                    } else {
+                        // --- 引き出し処理 ---
+                        // favoriteViewのi番目ではなく、データリストから直接取得して引き出す
+                        if (actualFavIndex < currentTab.slots.size()) {
+                            ItemStack favItem = currentTab.slots.get(actualFavIndex);
+                            if (favItem != null) {
+                                int withdrawAmount = (button == 1) ? 1 : favItem.getMaxStackSize();
+                                this.tileEntity.getBulkStorage().withdrawStack(player, favItem, withdrawAmount);
+                            }
+                        }
+                    }
+                }
+
+                // 同期処理
+                this.updateVisibleSlots();
+                if (player instanceof EntityPlayerMP) {
+                    ((EntityPlayerMP) player).sendContainerToPlayer(this);
+                }
+            }
+            return null;
+        }
+
+        // --- 🌟 プレイヤーインベントリ (90-125) ---
+        try {
+            // Shiftクリックでの預け入れ
+            if (modifier == 1 && slotId >= 90) {
+                if (!player.worldObj.isRemote) {
+                    this.handleDeposit(slotId, player);
+                }
+                return null;
+            }
+            return super.slotClick(slotId, button, modifier, player);
+        } catch (Exception e) {
+            System.err.println(side + " Error: " + e.getMessage());
+            return null;
+        }
+    }
+
+    @Override
+    public ItemStack transferStackInSlot(EntityPlayer player, int slotIndex) {
+
+        return null;
+    }
+
+    // 読み取り専用スロットクラス (1.5.2内部クラス)
+    private class SlotReadOnly extends Slot {
+        public SlotReadOnly(IInventory inv, int id, int x, int y) { super(inv, id, x, y); }
+        @Override public boolean isItemValid(ItemStack stack) { return false; }
+        @Override public boolean canTakeStack(EntityPlayer player) { return true; } // これをtrueに
+        @Override public ItemStack decrStackSize(int amount) { return null; } // 直接引き抜かれるのを防ぐ
+    }
+
+    // ComputerContainer.java の適当な場所（他のメソッドの間など）に追加
+    public InventoryBasic getFavoriteView() {
+        return this.favoriteView;
+    }
+
+    public ComputerBlockEntity getTileEntity() {
+        return this.tileEntity;
+    }
+    // 1.5.2用：表示専用（取り出したり置いたりできない）スロット
+    public class SlotFake extends net.minecraft.inventory.Slot {
+        public SlotFake(net.minecraft.inventory.IInventory inv, int index, int x, int y) {
+            super(inv, index, x, y);
+        }
+
+        @Override
+        public boolean isItemValid(ItemStack stack) { return false; } // アイテムを置けない
+
+        @Override
+        public boolean canTakeStack(net.minecraft.entity.player.EntityPlayer player) { return false; } // 持ち上げられない
+    }
+
+    @Override
+    public void detectAndSendChanges() {
+        // 🌟 先に表示を更新してから親の処理を呼ぶ
+        if (!this.player.worldObj.isRemote) {
+            this.updateVisibleSlots();
+        }
+        super.detectAndSendChanges();
+    }
+
+    private void handleWithdraw(int slotId, int amount, EntityPlayer player) {
+        Slot slot = (Slot) this.inventorySlots.get(slotId);
+        if (slot == null || !slot.getHasStack()) return;
+
+        ItemStack displayStack = slot.getStack();
+
+        // 🌟 引き出し実行（ここは今のままでOK）
+        this.tileEntity.getBulkStorage().withdrawStack(player, displayStack, amount);
+        this.tileEntity.onInventoryChanged();
+
+        // 🌟 重要：updateVisibleSlots を呼ぶ前に detectAndSendChanges を呼ぶか、
+        // サーバー側 Container の scrollPos が PacketHandler で更新されている必要があります。
+        this.updateVisibleSlots();
+
+        if (player instanceof EntityPlayerMP) {
+            // 🌟 画面全体を強制リフレッシュして「アイテムが消えた状態」をクライアントに送る
+            ((EntityPlayerMP) player).sendContainerToPlayer(this);
+        }
+    }
+
+
+    private void handleDeposit(int slotId, EntityPlayer player) {
+        Slot slot = (Slot) this.inventorySlots.get(slotId);
+        if (slot == null || !slot.getHasStack()) return;
+
+        ItemStack stackToDeposit = slot.getStack();
+        int addedCount = this.tileEntity.getBulkStorage().addStack(stackToDeposit, stackToDeposit.stackSize);
+
+        if (addedCount > 0) {
+            slot.putStack(null);
+
+            // 🌟 変更箇所3: 保存と表示更新
+            this.tileEntity.onInventoryChanged();
+            this.updateVisibleSlots();
+            this.detectAndSendChanges();
+
+            if (player instanceof EntityPlayerMP) {
+                ((EntityPlayerMP)player).sendContainerToPlayer(this);
+            }
+            System.out.println("SERVER: Deposit Success! Added: " + addedCount);
+        }
+    }
+}

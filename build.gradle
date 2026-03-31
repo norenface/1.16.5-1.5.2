@@ -1,0 +1,61 @@
+plugins {
+    id 'java'
+}
+
+group = 'com.tss'
+version = '1.0.0'
+description = 'TSS PC Mod for Minecraft 1.5.2'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+// Stub sources (Minecraft/Forge API stubs for compilation only)
+sourceSets {
+    stub {
+        java {
+            srcDirs = ['stubs']
+        }
+    }
+    main {
+        java {
+            srcDirs = ['src/main/java']
+        }
+        resources {
+            srcDirs = ['src/main/resources']
+        }
+        compileClasspath += sourceSets.stub.output
+    }
+}
+
+// Compile stubs first, then main sources
+compileJava.dependsOn compileStubJava
+
+// Build the mod JAR (only includes mod classes, not stubs)
+jar {
+    archiveBaseName = 'com_tss_pc'
+    archiveVersion = project.version
+    from sourceSets.main.output
+    // Include resources (mcmod.info, textures, etc.)
+    from(sourceSets.main.resources.srcDirs) {
+        include '**/*'
+    }
+    manifest {
+        attributes(
+            'FMLCorePlugin': 'com.tss.pc.TSSPCMod',
+            'Mod-Version': project.version
+        )
+    }
+}
+
+// Build stub JAR separately (for development use)
+task stubsJar(type: Jar) {
+    archiveBaseName = 'mc-stubs'
+    archiveVersion = '1.5.2'
+    from sourceSets.stub.output
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

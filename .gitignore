@@ -1,0 +1,8 @@
+# Build outputs (keep the final JAR but ignore intermediate)
+build/stubs/
+build/mod/
+*.class
+
+# Temp files
+mod_list.txt
+stubs_list.txt
