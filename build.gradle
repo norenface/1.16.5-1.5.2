@@ -36,6 +36,7 @@ compileJava.dependsOn compileStubJava
 jar {
     archiveBaseName = 'com_tss_pc'
     archiveVersion = project.version
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from sourceSets.main.output
     // Include resources (mcmod.info, textures, etc.)
     from(sourceSets.main.resources.srcDirs) {

@@ -147,12 +147,12 @@ public class BulkItemStorage {
 
         if (extracted != null && extracted.stackSize > 0) {
             // 2. プレイヤーのインベントリに加える
-            // 1.5.2 では player.inventory.addItemStackToInventory を使用
-            if (!player.inventory.addItemStackToInventory(extracted)) {
+            // 1.5.2 では player.field_71071_by.addItemStackToInventory を使用
+            if (!player.field_71071_by.func_70441_a(extracted)) {
                 // 3. インベントリがいっぱいなら足元にドロップ
                 // 1.5.2 での確実なドロップメソッド: dropPlayerItemWithRandomChoice
                 // (第2引数は「ランダムに散らすか」のフラグ)
-                player.dropPlayerItemWithRandomChoice(extracted, false);
+                player.func_70998_q(extracted, false);
             }
 
             // 4. 変更を通知
@@ -250,7 +250,7 @@ public class BulkItemStorage {
     }
 
     // 🌟 1.5.2 用のデータ保存 (serialize/deserialize)
-    public void writeToNBT(NBTTagCompound nbt) {
+    public void func_70310_b(NBTTagCompound nbt) {
         NBTTagList list = new NBTTagList();
         for (ItemStack stack : inventory) {
             NBTTagCompound sTag = new NBTTagCompound();
@@ -262,7 +262,7 @@ public class BulkItemStorage {
         nbt.setTag("Items", list);
     }
 
-    public void readFromNBT(NBTTagCompound nbt) {
+    public void func_70307_a(NBTTagCompound nbt) {
         inventory.clear();
         NBTTagList list = nbt.getTagList("Items");
         for (int i = 0; i < list.tagCount(); i++) {

@@ -1,0 +1,4 @@
+Manifest-Version: 1.0
+FMLCorePlugin: com.tss.pc.TSSPCMod
+Mod-Version: 1.0.0
+

@@ -27,9 +27,9 @@ public class TSSPCMod {
 
     @PreInit // 🌟 EventHandler ではなく PreInit
     public void preInit(FMLPreInitializationEvent event) {
-        computerBlock = new ComputerBlock(500, Material.rock)
-                .setUnlocalizedName("pc_block")
-                .setCreativeTab(CreativeTabs.tabDecorations);
+        computerBlock = new ComputerBlock(500, Material.field_76246_e)
+                .func_71908_c("pc_block")
+                .func_71905_a(CreativeTabs.field_78027_e);
 
         GameRegistry.registerBlock(computerBlock, "pc_block");
         GameRegistry.registerTileEntity(ComputerBlockEntity.class, "TSSComputerTile");

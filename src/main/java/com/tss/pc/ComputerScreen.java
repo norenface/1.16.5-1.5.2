@@ -97,7 +97,7 @@ public class ComputerScreen extends GuiContainer {
         int left = (this.width - this.xSize) / 2;
         int top = (this.height - this.ySize) / 2;
         this.tabX = left + this.xSize; // タブは画面の右端から始まる
-        ComputerContainer container = (ComputerContainer) this.inventorySlots;
+        ComputerContainer container = (ComputerContainer) this.field_73875_a;
 
 
         GL11.glDisable(GL11.GL_TEXTURE_2D);
@@ -114,8 +114,8 @@ public class ComputerScreen extends GuiContainer {
 
         // 3. スロットに「枠線」をつけるループ
         // 1.16.5のように、背景(0xFF252526)の上に少し小さい四角を描くことで枠線を表現します
-        for (int s = 0; s < this.inventorySlots.inventorySlots.size(); s++) {
-            net.minecraft.inventory.Slot slot = (net.minecraft.inventory.Slot) this.inventorySlots.inventorySlots.get(s);
+        for (int s = 0; s < this.field_73875_a.field_75151_b.size(); s++) {
+            net.minecraft.inventory.Slot slot = (net.minecraft.inventory.Slot) this.field_73875_a.field_75151_b.get(s);
             int slotX = left + slot.xDisplayPosition - 1;
             int slotY = top + slot.yDisplayPosition - 1;
 
@@ -219,7 +219,7 @@ public class ComputerScreen extends GuiContainer {
             ComputerBlockEntity.FavoriteTab currentTab = tabs.get(actualIndex);
 
             // 🌟 選択中のタブのハイライト判定 (actualIndexを使用)
-            if (actualIndex == ((ComputerContainer)this.inventorySlots).selectedTabIndex) {
+            if (actualIndex == ((ComputerContainer)this.field_73875_a).selectedTabIndex) {
                 GL11.glDisable(GL11.GL_TEXTURE_2D);
                 drawRect(left + this.xSize, iconY - 2, left + this.xSize + 22, iconY + 18, 0xFF007ACC);
                 GL11.glEnable(GL11.GL_TEXTURE_2D);
@@ -245,7 +245,7 @@ public class ComputerScreen extends GuiContainer {
         boolean isMouseDown = org.lwjgl.input.Mouse.isButtonDown(0);
         int left = (this.width - this.xSize) / 2;
         int top = (this.height - this.ySize) / 2;
-        ComputerContainer container = (ComputerContainer) this.inventorySlots;
+        ComputerContainer container = (ComputerContainer) this.field_73875_a;
 
         // --- スクロールドラッグ処理 ---
         if (isMouseDown) {
@@ -310,9 +310,9 @@ public class ComputerScreen extends GuiContainer {
 
         // 🌟 全スロット（ストレージ0-44 + お気に入り45-89）を対象にするならループを90まで
         for (int i = 0; i < 90; i++) {
-            Slot slot = (Slot) this.inventorySlots.inventorySlots.get(i);
-            if (slot != null && slot.getHasStack()) {
-                ItemStack stackInSlot = slot.getStack();
+            Slot slot = (Slot) this.field_73875_a.field_75151_b.get(i);
+            if (slot != null && slot.func_75216_f()) {
+                ItemStack stackInSlot = slot.func_75211_c();
 
                 // NBTから "RealCount" を取り出す
                 int realCount = 0;
@@ -378,16 +378,16 @@ public class ComputerScreen extends GuiContainer {
 
             // --- 2. ストレージスロット (0-44) ---
             if (id >= 0 && id < 45) {
-                if (this.mc.thePlayer.inventory.getItemStack() == null && slot.getHasStack()) {
+                if (this.mc.thePlayer.field_71071_by.getItemStack() == null && slot.func_75216_f()) {
                     if (button == 0) {
                         this.isDraggingItem = true;
-                        this.draggingStack = slot.getStack().copy();
+                        this.draggingStack = slot.func_75211_c().copy();
                         this.pressedSlotIndex = id;
 
                         boolean isShift = org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_LSHIFT) ||
                                 org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_RSHIFT);
                         int amount = isShift ? 64 : 1;
-                        this.sendComputerPacket(2, 0, id, slot.getStack(), amount);
+                        this.sendComputerPacket(2, 0, id, slot.func_75211_c(), amount);
                         this.mc.sndManager.playSoundFX("random.click", 0.6F, 1.2F);
                         return;
                     }
@@ -397,12 +397,12 @@ public class ComputerScreen extends GuiContainer {
             // --- 3. お気に入りスロット (45-89) ---
             else if (id >= 45 && id < 90) {
                 // 🌟 修正：どのような操作であっても、お気に入りスロットならここで処理を完結させる
-                if (this.mc.thePlayer.inventory.getItemStack() == null && slot.getHasStack()) {
+                if (this.mc.thePlayer.field_71071_by.getItemStack() == null && slot.func_75216_f()) {
                     // 左(0)または右(1)クリックで引き出し
                     if (button == 0 || button == 1) {
                         boolean isShift = org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_LSHIFT);
                         int amount = isShift ? 64 : 1;
-                        this.sendComputerPacket(2, 0, id, slot.getStack(), amount);
+                        this.sendComputerPacket(2, 0, id, slot.func_75211_c(), amount);
                         this.mc.sndManager.playSoundFX("random.click", 0.6F, 1.2F);
                     }
                 }
@@ -467,7 +467,7 @@ public class ComputerScreen extends GuiContainer {
                         }
 
                         // コンテナに最新の状態を反映
-                        ComputerContainer container = (ComputerContainer) this.inventorySlots;
+                        ComputerContainer container = (ComputerContainer) this.field_73875_a;
                         container.favScrollPos = this.favoriteScrollOffs;
                         container.updateVisibleSlots();
                     }
@@ -486,7 +486,7 @@ public class ComputerScreen extends GuiContainer {
             int tabYStart = 10 + (i * 20);
             // マウスがその枠内にあるか判定
             if (relX >= this.xSize && relX <= this.xSize + 25 && relY >= tabYStart && relY <= tabYStart + 20) {
-                net.minecraft.item.ItemStack heldItem = this.mc.thePlayer.inventory.getItemStack();
+                net.minecraft.item.ItemStack heldItem = this.mc.thePlayer.field_71071_by.getItemStack();
 
                 if (button == 2) { // ホイールクリックで消去
                     sendTabAction(4, actualIndex, "", null);
@@ -494,7 +494,7 @@ public class ComputerScreen extends GuiContainer {
                     sendTabAction(4, actualIndex, "", heldItem);
                 } else { // タブ切り替え
                     this.selectedTabIndex = actualIndex;
-                    ((ComputerContainer)this.inventorySlots).selectedTabIndex = actualIndex;
+                    ((ComputerContainer)this.field_73875_a).selectedTabIndex = actualIndex;
 
                     // 🌟 これを追加！
                     this.tabNameField.setText(tabsForClick.get(actualIndex).name);
@@ -549,14 +549,14 @@ public class ComputerScreen extends GuiContainer {
                 }
 
                 // 5. サーバーへ「今これを選んでいるよ」と念押し（同期）
-                ((ComputerContainer)this.inventorySlots).selectedTabIndex = this.selectedTabIndex;
+                ((ComputerContainer)this.field_73875_a).selectedTabIndex = this.selectedTabIndex;
                 sendTabAction(2, this.selectedTabIndex, "", null);
 
                 // 6. 🌟 切り替わった先のタブ名称にテキストボックスを更新
                 this.tabNameField.setText(tabs.get(this.selectedTabIndex).name);
 
                 // 7. 表示スロットの更新
-                ((ComputerContainer)this.inventorySlots).updateVisibleSlots();
+                ((ComputerContainer)this.field_73875_a).updateVisibleSlots();
                 return;
             }
         }
@@ -619,7 +619,7 @@ public class ComputerScreen extends GuiContainer {
             }
 
             // 🌟 追記：現在のスクロール位置をパケットの末尾に追加
-            ComputerContainer container = (ComputerContainer)this.inventorySlots;
+            ComputerContainer container = (ComputerContainer)this.field_73875_a;
             dos.writeFloat(container.scrollPos);       // メインストレージ用
             dos.writeFloat(this.favoriteScrollOffs);   // お気に入り用
 
@@ -675,7 +675,7 @@ public class ComputerScreen extends GuiContainer {
             } else {
                 // スロット外クリック（マウスでアイテムを掴んでいるかチェック）
                 // 🌟 mc.thePlayer を使うのが1.5.2のGUIでは一番安全です
-                if (this.mc.thePlayer.inventory.getItemStack() != null) {
+                if (this.mc.thePlayer.field_71071_by.getItemStack() != null) {
                     sendActionPacket(6, -999);
                 }
             }
@@ -689,15 +689,15 @@ public class ComputerScreen extends GuiContainer {
         // --- ストレージスロット (0-44) ---
         // --- ストレージスロット (0-44) ---
         if (slotId >= 0 && slotId < 45) {
-            net.minecraft.item.ItemStack heldStack = this.mc.thePlayer.inventory.getItemStack();
+            net.minecraft.item.ItemStack heldStack = this.mc.thePlayer.field_71071_by.getItemStack();
             if (heldStack != null) {
                 this.sendComputerPacket(6, 0, slotId, heldStack, 0); // 預け入れ
                 return; // 🌟 superを呼ばない
             }
 
-            if (slot != null && slot.getHasStack()) {
+            if (slot != null && slot.func_75216_f()) {
                 int amount = (mode == 1) ? 64 : 1;
-                this.sendComputerPacket(2, 0, slotId, slot.getStack(), amount); // 引き出し
+                this.sendComputerPacket(2, 0, slotId, slot.func_75211_c(), amount); // 引き出し
                 return; // 🌟 superを呼ばない
             }
             return;
@@ -706,7 +706,7 @@ public class ComputerScreen extends GuiContainer {
         // --- お気に入りスロット (45-89) ---
         if (slotId >= 45 && slotId < 90) {
             // お気に入り登録 (PacketId: 1, ActionType: 5)
-            this.sendComputerPacket(1, 5, slotId - 45, this.mc.thePlayer.inventory.getItemStack(), 0);
+            this.sendComputerPacket(1, 5, slotId - 45, this.mc.thePlayer.field_71071_by.getItemStack(), 0);
             return;
         }
 
@@ -723,7 +723,7 @@ public class ComputerScreen extends GuiContainer {
         int mouseY = this.height - org.lwjgl.input.Mouse.getEventY() * this.height / this.mc.displayHeight - 1;
         int left = (this.width - this.xSize) / 2;
 
-        ComputerContainer container = (ComputerContainer) this.inventorySlots;
+        ComputerContainer container = (ComputerContainer) this.field_73875_a;
 
         if (mouseX < left + 185) { // メインエリア
             float step = 1.0F / Math.max(1, container.getMaxMainRows() - 5);
@@ -882,7 +882,7 @@ public class ComputerScreen extends GuiContainer {
                 dos.writeInt(amount);
 
                 // 🌟 追記：サーバー側の readFloat() と対応させる
-                ComputerContainer container = (ComputerContainer)this.inventorySlots;
+                ComputerContainer container = (ComputerContainer)this.field_73875_a;
                 dos.writeFloat(container.scrollPos);
                 dos.writeFloat(this.favoriteScrollOffs);
 
@@ -908,7 +908,7 @@ public class ComputerScreen extends GuiContainer {
                 }
 
                 // 🌟 追記：サーバー側の readFloat() と対応させる
-                ComputerContainer container = (ComputerContainer)this.inventorySlots;
+                ComputerContainer container = (ComputerContainer)this.field_73875_a;
                 dos.writeFloat(container.scrollPos);
                 dos.writeFloat(this.favoriteScrollOffs);
 
@@ -933,13 +933,13 @@ public class ComputerScreen extends GuiContainer {
     }
 
     private void updateSearch() {
-        ((ComputerContainer) this.inventorySlots).searchText = this.searchBox.getText();
-        ((ComputerContainer) this.inventorySlots).updateVisibleSlots();
+        ((ComputerContainer) this.field_73875_a).searchText = this.searchBox.getText();
+        ((ComputerContainer) this.field_73875_a).updateVisibleSlots();
         // サーバーに検索ワードを伝えるパケット送信処理をここに追加
     }
     private net.minecraft.inventory.Slot getSlotAtPositionEx(int mouseX, int mouseY) {
-        for (int i = 0; i < this.inventorySlots.inventorySlots.size(); ++i) {
-            net.minecraft.inventory.Slot slot = (net.minecraft.inventory.Slot)this.inventorySlots.inventorySlots.get(i);
+        for (int i = 0; i < this.field_73875_a.field_75151_b.size(); ++i) {
+            net.minecraft.inventory.Slot slot = (net.minecraft.inventory.Slot)this.field_73875_a.field_75151_b.get(i);
             // 自作した判定メソッドを呼ぶ
             if (this.isMouseOverSlotEx(slot, mouseX, mouseY)) {
                 return slot;

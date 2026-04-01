@@ -1,0 +1,16 @@
+[
+    {
+        "modid": "tss_pc",
+        "name": "TSS PC Mod",
+        "description": "A PC/Computer block mod for Minecraft 1.5.2 that provides virtual item storage.",
+        "version": "1.0.0",
+        "mcversion": "1.5.2",
+        "url": "",
+        "updateUrl": "",
+        "authorList": [],
+        "credits": "",
+        "logoFile": "",
+        "screenshots": [],
+        "dependencies": []
+    }
+]
