@@ -1,7 +1,13 @@
 # Build outputs (keep the final JAR but ignore intermediate)
 build/stubs/
 build/mod/
+build/classes/
+build/tmp/
+build/reports/
 *.class
+
+# Gradle cache
+.gradle/
 
 # Temp files
 mod_list.txt
