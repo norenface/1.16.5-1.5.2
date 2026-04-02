@@ -32,8 +32,29 @@ sourceSets {
 // Compile stubs first, then main sources
 compileJava.dependsOn compileStubJava
 
+// Patch class file version from Java 8 (52) to Java 7 (51) for ASM 4.1 compatibility
+task patchClassVersion {
+    dependsOn compileJava
+    doLast {
+        fileTree(dir: sourceSets.main.output.classesDirs.first(), include: '**/*.class').each { File classFile ->
+            byte[] bytes = classFile.bytes
+            if (bytes.length >= 8
+                    && (bytes[0] & 0xFF) == 0xCA && (bytes[1] & 0xFF) == 0xFE
+                    && (bytes[2] & 0xFF) == 0xBA && (bytes[3] & 0xFF) == 0xBE) {
+                // Java 8 = major version 52 (0x34); downgrade to Java 7 = 51 (0x33)
+                if (bytes[6] == 0 && (bytes[7] & 0xFF) == 52) {
+                    bytes[7] = 51
+                    classFile.bytes = bytes
+                }
+            }
+        }
+        println "Patched class files to Java 7 bytecode version"
+    }
+}
+
 // Build the mod JAR (only includes mod classes, not stubs)
 jar {
+    dependsOn patchClassVersion
     archiveBaseName = 'com_tss_pc'
     archiveVersion = project.version
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
