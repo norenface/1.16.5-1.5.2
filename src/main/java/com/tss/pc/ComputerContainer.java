@@ -47,26 +47,26 @@ public class ComputerContainer extends Container {
 
         // 1. メインストレージ表示 (0-44)
         for (int i = 0; i < 45; i++) {
-            this.func_75125_e(new SlotReadOnly(storageView, i, 8 + (i % 9) * 18, 26 + (i / 9) * 18));
+            this.addSlotToContainer(new SlotReadOnly(storageView, i, 8 + (i % 9) * 18, 26 + (i / 9) * 18));
         }
 
         // 2. お気に入り (45-89)
         for (int i = 0; i < 45; i++) {
-            this.func_75125_e(new SlotReadOnly(favoriteView, i, 192 + (i % 5) * 18, 26 + (i / 5) * 18));
+            this.addSlotToContainer(new SlotReadOnly(favoriteView, i, 192 + (i % 5) * 18, 26 + (i / 5) * 18));
         }
 
         // 3. プレイヤーインベントリ (90-116)
         for (int i = 0; i < 27; i++) {
-            this.func_75125_e(new Slot(invPlayer, i + 9, 8 + (i % 9) * 18, 140 + (i / 9) * 18));
+            this.addSlotToContainer(new Slot(invPlayer, i + 9, 8 + (i % 9) * 18, 140 + (i / 9) * 18));
         }
 
         // 4. ホットバー (117-125)
         for (int i = 0; i < 9; i++) {
-            this.func_75125_e(new Slot(invPlayer, i, 8 + i * 18, 198));
+            this.addSlotToContainer(new Slot(invPlayer, i, 8 + i * 18, 198));
         }
 
         // デバッグ用：スロットがいくつ登録されたかコンソールに出す
-        System.out.println("DEBUG: Container initialized. Total slots: " + this.field_75151_b.size());
+        System.out.println("DEBUG: Container initialized. Total slots: " + this.inventorySlots.size());
 
         // 🛡️ 転送処理等の設定
         if (this.tileEntity != null && this.tileEntity.getBulkStorage() != null) {
@@ -79,12 +79,12 @@ public class ComputerContainer extends Container {
         }
         // コンストラクタの最後の } の直前に追加
         System.out.println("=== CONTAINER DEBUG START ===");
-        System.out.println("Side: " + (this.player.field_70170_p.field_72995_K ? "CLIENT" : "SERVER"));
-        System.out.println("Total Registered Slots: " + this.field_75151_b.size());
-        for (int i = 0; i < this.field_75151_b.size(); i++) {
-            Slot s = (Slot)this.field_75151_b.get(i);
+        System.out.println("Side: " + (this.player.worldObj.isRemote ? "CLIENT" : "SERVER"));
+        System.out.println("Total Registered Slots: " + this.inventorySlots.size());
+        for (int i = 0; i < this.inventorySlots.size(); i++) {
+            Slot s = (Slot)this.inventorySlots.get(i);
             // 110番目のスロットがどこを指しているか確認
-            if (i == 110) System.out.println("SLOT 110: " + s.inventory.func_70303_a());
+            if (i == 110) System.out.println("SLOT 110: " + s.inventory.getInvName());
         }
         System.out.println("=== CONTAINER DEBUG END ===");
         // 最初の表示を更新
@@ -116,9 +116,9 @@ public class ComputerContainer extends Container {
                 if (s.stackTagCompound == null) s.stackTagCompound = new NBTTagCompound();
                 s.stackTagCompound.setInteger("RealCount", realCount);
                 s.stackSize = 1;
-                storageView.func_70299_a(i, s);
+                storageView.setInventorySlotContents(i, s);
             } else {
-                storageView.func_70299_a(i, null);
+                storageView.setInventorySlotContents(i, null);
             }
         }
 
@@ -150,47 +150,47 @@ public class ComputerContainer extends Container {
                         displayStack.stackTagCompound.setInteger("RealCount", realCount);
                         displayStack.stackSize = 1;
 
-                        this.favoriteView.func_70299_a(i, displayStack);
+                        this.favoriteView.setInventorySlotContents(i, displayStack);
                     } else {
-                        this.favoriteView.func_70299_a(i, null);
+                        this.favoriteView.setInventorySlotContents(i, null);
                     }
                 } else {
                     // 🌟 リストの範囲外（まだ行が追加されていない場所）は空にする
-                    this.favoriteView.func_70299_a(i, null);
+                    this.favoriteView.setInventorySlotContents(i, null);
                 }
             }
         }
     }
     @Override
-    public boolean func_75145_c(EntityPlayer player) {
+    public boolean canInteractWith(EntityPlayer player) {
         return true;
     }
     @Override
-    public ItemStack func_75140_a(int slotId, int button, int modifier, net.minecraft.entity.player.EntityPlayer player) {
+    public ItemStack slotClick(int slotId, int button, int modifier, net.minecraft.entity.player.EntityPlayer player) {
         // 🌟 'side' の定義を復活（デバッグ用）
-        String side = player.field_70170_p.field_72995_K ? "[CLIENT]" : "[SERVER]";
+        String side = player.worldObj.isRemote ? "[CLIENT]" : "[SERVER]";
         System.out.println(side + " Click: SlotID=" + slotId + ", Button=" + button + ", Mod=" + modifier);
         // 範囲外ガード
-        if (slotId < 0 || slotId >= this.field_75151_b.size()) return null;
+        if (slotId < 0 || slotId >= this.inventorySlots.size()) return null;
 
         // --- 🌟 ストレージ表示スロット (0-44) ---
         if (slotId >= 0 && slotId < 45) {
-            if (!player.field_70170_p.field_72995_K) {
+            if (!player.worldObj.isRemote) {
                 // サーバー側
-                Slot slot = (Slot) this.field_75151_b.get(slotId);
-                if (slot != null && slot.func_75216_f()) {
-                    System.out.println(side + " Processing Withdraw for: " + slot.func_75211_c().getDisplayName());
+                Slot slot = (Slot) this.inventorySlots.get(slotId);
+                if (slot != null && slot.getHasStack()) {
+                    System.out.println(side + " Processing Withdraw for: " + slot.getStack().getDisplayName());
                     System.out.println(side + " Attempting Withdraw: Slot " + slotId);
 
                     // 右クリックなら1個、それ以外なら最大スタック数
-                    int amount = (button == 1) ? 1 : slot.func_75211_c().getMaxStackSize();
+                    int amount = (button == 1) ? 1 : slot.getStack().getMaxStackSize();
 
                     // 実際の引き出し処理
                     this.handleWithdraw(slotId, amount, player);
 
                     // 🌟 サーバーからクライアントへ強制同期（これで画面に反映される）
                     if (player instanceof EntityPlayerMP) {
-                        ((EntityPlayerMP) player).func_70483_a(this);
+                        ((EntityPlayerMP) player).sendContainerToPlayer(this);
                         System.out.println(side + " Sent Container update packet to player.");
                     }
                 }
@@ -200,7 +200,7 @@ public class ComputerContainer extends Container {
 
         // --- 🌟 お気に入りスロット (45-89) ---
         if (slotId >= 45 && slotId < 90) {
-            if (!player.field_70170_p.field_72995_K) {
+            if (!player.worldObj.isRemote) {
                 // 🌟 修正：スクロール位置から「実際のデータの場所」を逆算する
                 List<ComputerBlockEntity.FavoriteTab> playerTabs = tileEntity.getTabsForPlayer(player);
                 if (playerTabs != null && !playerTabs.isEmpty()) {
@@ -213,7 +213,7 @@ public class ComputerContainer extends Container {
                     // 🌟 実際のインデックス = (開始行 * 5列) + (クリックされたスロットの相対ID)
                     int actualFavIndex = (startFavRow * 5) + (slotId - 45);
 
-                    ItemStack mouseStack = player.field_71071_by.getItemStack();
+                    ItemStack mouseStack = player.inventory.getItemStack();
 
                     if (mouseStack != null) {
                         // --- 登録処理 ---
@@ -241,7 +241,7 @@ public class ComputerContainer extends Container {
                 // 同期処理
                 this.updateVisibleSlots();
                 if (player instanceof EntityPlayerMP) {
-                    ((EntityPlayerMP) player).func_70483_a(this);
+                    ((EntityPlayerMP) player).sendContainerToPlayer(this);
                 }
             }
             return null;
@@ -251,12 +251,12 @@ public class ComputerContainer extends Container {
         try {
             // Shiftクリックでの預け入れ
             if (modifier == 1 && slotId >= 90) {
-                if (!player.field_70170_p.field_72995_K) {
+                if (!player.worldObj.isRemote) {
                     this.handleDeposit(slotId, player);
                 }
                 return null;
             }
-            return super.func_75140_a(slotId, button, modifier, player);
+            return super.slotClick(slotId, button, modifier, player);
         } catch (Exception e) {
             System.err.println(side + " Error: " + e.getMessage());
             return null;
@@ -264,7 +264,7 @@ public class ComputerContainer extends Container {
     }
 
     @Override
-    public ItemStack func_75150_a(EntityPlayer player, int slotIndex) {
+    public ItemStack transferStackInSlot(EntityPlayer player, int slotIndex) {
 
         return null;
     }
@@ -272,9 +272,9 @@ public class ComputerContainer extends Container {
     // 読み取り専用スロットクラス (1.5.2内部クラス)
     private class SlotReadOnly extends Slot {
         public SlotReadOnly(IInventory inv, int id, int x, int y) { super(inv, id, x, y); }
-        @Override public boolean func_75214_a(ItemStack stack) { return false; }
-        @Override public boolean func_82869_a(EntityPlayer player) { return true; } // これをtrueに
-        @Override public ItemStack func_75209_e(int amount) { return null; } // 直接引き抜かれるのを防ぐ
+        @Override public boolean isItemValid(ItemStack stack) { return false; }
+        @Override public boolean canTakeStack(EntityPlayer player) { return true; } // これをtrueに
+        @Override public ItemStack decrStackSize(int amount) { return null; } // 直接引き抜かれるのを防ぐ
     }
 
     // ComputerContainer.java の適当な場所（他のメソッドの間など）に追加
@@ -292,30 +292,30 @@ public class ComputerContainer extends Container {
         }
 
         @Override
-        public boolean func_75214_a(ItemStack stack) { return false; } // アイテムを置けない
+        public boolean isItemValid(ItemStack stack) { return false; } // アイテムを置けない
 
         @Override
-        public boolean func_82869_a(net.minecraft.entity.player.EntityPlayer player) { return false; } // 持ち上げられない
+        public boolean canTakeStack(net.minecraft.entity.player.EntityPlayer player) { return false; } // 持ち上げられない
     }
 
     @Override
-    public void func_75142_b() {
+    public void detectAndSendChanges() {
         // 🌟 先に表示を更新してから親の処理を呼ぶ
-        if (!this.player.field_70170_p.field_72995_K) {
+        if (!this.player.worldObj.isRemote) {
             this.updateVisibleSlots();
         }
-        super.func_75142_b();
+        super.detectAndSendChanges();
     }
 
     private void handleWithdraw(int slotId, int amount, EntityPlayer player) {
-        Slot slot = (Slot) this.field_75151_b.get(slotId);
-        if (slot == null || !slot.func_75216_f()) return;
+        Slot slot = (Slot) this.inventorySlots.get(slotId);
+        if (slot == null || !slot.getHasStack()) return;
 
-        ItemStack displayStack = slot.func_75211_c();
+        ItemStack displayStack = slot.getStack();
 
         // 🌟 引き出し実行（ここは今のままでOK）
         this.tileEntity.getBulkStorage().withdrawStack(player, displayStack, amount);
-        this.tileEntity.func_70296_a();
+        this.tileEntity.onInventoryChanged();
 
         // 🌟 重要：updateVisibleSlots を呼ぶ前に detectAndSendChanges を呼ぶか、
         // サーバー側 Container の scrollPos が PacketHandler で更新されている必要があります。
@@ -323,28 +323,28 @@ public class ComputerContainer extends Container {
 
         if (player instanceof EntityPlayerMP) {
             // 🌟 画面全体を強制リフレッシュして「アイテムが消えた状態」をクライアントに送る
-            ((EntityPlayerMP) player).func_70483_a(this);
+            ((EntityPlayerMP) player).sendContainerToPlayer(this);
         }
     }
 
 
     private void handleDeposit(int slotId, EntityPlayer player) {
-        Slot slot = (Slot) this.field_75151_b.get(slotId);
-        if (slot == null || !slot.func_75216_f()) return;
+        Slot slot = (Slot) this.inventorySlots.get(slotId);
+        if (slot == null || !slot.getHasStack()) return;
 
-        ItemStack stackToDeposit = slot.func_75211_c();
+        ItemStack stackToDeposit = slot.getStack();
         int addedCount = this.tileEntity.getBulkStorage().addStack(stackToDeposit, stackToDeposit.stackSize);
 
         if (addedCount > 0) {
-            slot.func_75212_b(null);
+            slot.putStack(null);
 
             // 🌟 変更箇所3: 保存と表示更新
-            this.tileEntity.func_70296_a();
+            this.tileEntity.onInventoryChanged();
             this.updateVisibleSlots();
-            this.func_75142_b();
+            this.detectAndSendChanges();
 
             if (player instanceof EntityPlayerMP) {
-                ((EntityPlayerMP)player).func_70483_a(this);
+                ((EntityPlayerMP)player).sendContainerToPlayer(this);
             }
             System.out.println("SERVER: Deposit Success! Added: " + addedCount);
         }

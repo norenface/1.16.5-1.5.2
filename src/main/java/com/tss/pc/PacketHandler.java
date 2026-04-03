@@ -26,8 +26,8 @@ public class PacketHandler implements IPacketHandler {
             try {
                 int packetId = dis.readByte();
 
-                if (!(entityPlayer.field_71069_bj instanceof ComputerContainer)) return;
-                ComputerContainer container = (ComputerContainer) entityPlayer.field_71069_bj;
+                if (!(entityPlayer.openContainer instanceof ComputerContainer)) return;
+                ComputerContainer container = (ComputerContainer) entityPlayer.openContainer;
                 ComputerBlockEntity te = container.getTileEntity();
 
                 if (packetId == 6) { // 預け入れ
@@ -153,9 +153,9 @@ public class PacketHandler implements IPacketHandler {
                         System.out.println("SERVER: Tab Icon CLEARED for index " + index);
                     }
 
-                    if (te.field_70331_j != null) {
-                        te.func_70296_a();
-                        te.field_70331_j.func_72698_d(te.field_70329_l, te.field_70330_k, te.field_70328_m);
+                    if (te.worldObj != null) {
+                        te.onInventoryChanged();
+                        te.worldObj.markBlockForUpdate(te.xCoord, te.yCoord, te.zCoord);
                     }
                 }
                 break;
@@ -172,10 +172,10 @@ public class PacketHandler implements IPacketHandler {
                         tab.slots.set(index, icon != null ? icon.copy() : null);
 
                         // 保存と同期
-                        te.func_70296_a();
+                        te.onInventoryChanged();
                         container.updateVisibleSlots();
                         if (player instanceof net.minecraft.entity.player.EntityPlayerMP) {
-                            ((net.minecraft.entity.player.EntityPlayerMP) player).func_70483_a(container);
+                            ((net.minecraft.entity.player.EntityPlayerMP) player).sendContainerToPlayer(container);
                         }
                     }
                 }
@@ -196,10 +196,10 @@ public class PacketHandler implements IPacketHandler {
                     FavoriteConfig.saveAll(te.getAllPlayerTabs());
 
                     // 🌟 2. TileEntity の変更を通知（これがないとクライアントにパケットが飛ばない）
-                    te.func_70296_a();
-                    if (te.field_70331_j != null) {
+                    te.onInventoryChanged();
+                    if (te.worldObj != null) {
                         // クライアントへ TileEntity の NBT データを再送させる
-                        te.field_70331_j.func_72698_d(te.field_70329_l, te.field_70330_k, te.field_70328_m);
+                        te.worldObj.markBlockForUpdate(te.xCoord, te.yCoord, te.zCoord);
                     }
 
                     System.out.println("SERVER: Added Row. Current Total Slots: " + tab.slots.size());
@@ -207,7 +207,7 @@ public class PacketHandler implements IPacketHandler {
                     // 🌟 3. コンテナの表示内容を更新
                     container.updateVisibleSlots();
                     if (player instanceof net.minecraft.entity.player.EntityPlayerMP) {
-                        ((net.minecraft.entity.player.EntityPlayerMP) player).func_70483_a(container);
+                        ((net.minecraft.entity.player.EntityPlayerMP) player).sendContainerToPlayer(container);
                     }
                 }
                 break;
@@ -224,7 +224,7 @@ public class PacketHandler implements IPacketHandler {
                         // 同期処理
                         container.updateVisibleSlots();
                         if (player instanceof net.minecraft.entity.player.EntityPlayerMP) {
-                            ((net.minecraft.entity.player.EntityPlayerMP) player).func_70483_a(container);
+                            ((net.minecraft.entity.player.EntityPlayerMP) player).sendContainerToPlayer(container);
                         }
                     } else {
                         System.out.println("SERVER: Cannot remove row. Already at minimum (45).");
@@ -236,16 +236,16 @@ public class PacketHandler implements IPacketHandler {
         FavoriteConfig.saveAll(te.getAllPlayerTabs());
 
         // 🌟 1.5.2での同期 (te. 経由で呼ぶことで worldObj エラーを回避)
-        te.func_70296_a();
+        te.onInventoryChanged();
 
-        if (te.field_70331_j != null) {
+        if (te.worldObj != null) {
             // サーバーからクライアントへ「データ送って！」と通知する命令
-            te.field_70331_j.func_72698_d(te.field_70329_l, te.field_70330_k, te.field_70328_m);
+            te.worldObj.markBlockForUpdate(te.xCoord, te.yCoord, te.zCoord);
         }
 
         // UIの表示更新
         container.updateVisibleSlots();
-        container.func_75142_b();
+        container.detectAndSendChanges();
     }
     /**
      * ItemStack読み込み用の補助メソッド
@@ -256,10 +256,10 @@ public class PacketHandler implements IPacketHandler {
         // 🌟 スロット番号からアイテムを特定する
         if (slotIndex == -999) {
             // マウスで掴んでいるアイテム
-            stackInSlot = player.field_71071_by.getItemStack();
-        } else if (slotIndex >= 0 && slotIndex < player.field_71071_by.field_70462_a.length) {
+            stackInSlot = player.inventory.getItemStack();
+        } else if (slotIndex >= 0 && slotIndex < player.inventory.mainInventory.length) {
             // インベントリ内の指定スロットのアイテム
-            stackInSlot = player.field_71071_by.func_70301_a(slotIndex);
+            stackInSlot = player.inventory.getStackInSlot(slotIndex);
         }
 
         // アイテムが存在する場合のみ処理
@@ -269,18 +269,18 @@ public class PacketHandler implements IPacketHandler {
 
             // 2. インベントリ側を空にする
             if (slotIndex == -999) {
-                player.field_71071_by.setItemStack(null);
+                player.inventory.setItemStack(null);
             } else {
-                player.field_71071_by.func_70299_a(slotIndex, null);
+                player.inventory.setInventorySlotContents(slotIndex, null);
             }
 
             // 3. 同期処理
             if (player instanceof net.minecraft.entity.player.EntityPlayerMP) {
                 net.minecraft.entity.player.EntityPlayerMP playerMP = (net.minecraft.entity.player.EntityPlayerMP) player;
-                playerMP.func_70483_a(container);
+                playerMP.sendContainerToPlayer(container);
                 playerMP.updateHeldItem();
             }
-            te.func_70296_a();
+            te.onInventoryChanged();
         }
     }
 
@@ -302,8 +302,8 @@ public class PacketHandler implements IPacketHandler {
 
         if (result != null) {
             // 2. プレイヤーに渡す
-            if (!player.field_71071_by.func_70441_a(result)) {
-                player.func_71018_a(result);
+            if (!player.inventory.addItemStackToInventory(result)) {
+                player.dropPlayerItem(result);
             }
 
             // 🌟 3. お気に入りデータの同期 (タイルエンティティ側の実データを更新)
@@ -329,10 +329,10 @@ public class PacketHandler implements IPacketHandler {
             container.updateVisibleSlots();
 
             if (player instanceof net.minecraft.entity.player.EntityPlayerMP) {
-                container.func_75142_b();
-                ((net.minecraft.entity.player.EntityPlayerMP) player).func_70483_a(container);
+                container.detectAndSendChanges();
+                ((net.minecraft.entity.player.EntityPlayerMP) player).sendContainerToPlayer(container);
             }
-            te.func_70296_a();
+            te.onInventoryChanged();
         }
     }
 

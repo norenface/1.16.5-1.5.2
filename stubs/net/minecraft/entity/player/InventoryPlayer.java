@@ -2,27 +2,27 @@ package net.minecraft.entity.player;
 import net.minecraft.item.ItemStack;
 import net.minecraft.inventory.IInventory;
 public class InventoryPlayer implements IInventory {
-    public ItemStack[] field_70462_a = new ItemStack[36]; // mainInventory
+    public ItemStack[] mainInventory = new ItemStack[36];
     public ItemStack[] armorInventory = new ItemStack[4];
-    public int field_70461_c = 0;  // currentItem
+    public int currentItem = 0;
     public EntityPlayer player;
     private ItemStack itemStack; // currently held (picked up) item
     public InventoryPlayer(EntityPlayer player) { this.player = player; }
-    public ItemStack func_70445_o() { return field_70461_c >= 0 && field_70461_c < field_70462_a.length ? field_70462_a[field_70461_c] : null; } // getCurrentItem
     public ItemStack getItemStack() { return itemStack; }
     public void setItemStack(ItemStack stack) { this.itemStack = stack; }
-    public boolean func_70441_a(ItemStack stack) { return false; } // addItemStackToInventory
-    @Override public int func_70302_a() { return field_70462_a.length; }          // getSizeInventory
-    @Override public ItemStack func_70301_a(int i) { return i < field_70462_a.length ? field_70462_a[i] : (i - field_70462_a.length < armorInventory.length ? armorInventory[i - field_70462_a.length] : null); } // getStackInSlot
-    @Override public ItemStack func_70298_a(int i, int count) { return null; }    // decrStackSize
-    @Override public ItemStack func_70304_a(int i) { return null; }               // getStackInSlotOnClosing
-    @Override public void func_70299_a(int i, ItemStack s) { if (i < field_70462_a.length) field_70462_a[i] = s; } // setInventorySlotContents
-    @Override public String func_70303_a() { return "inventory"; }                // getInvName
-    @Override public boolean func_71125_a() { return false; }                     // isInvNameLocalized
-    @Override public int func_70297_a() { return 64; }                            // getInventoryStackLimit
-    @Override public void func_70296_a() {}                                        // onInventoryChanged
-    @Override public boolean func_70300_a(EntityPlayer p) { return true; }        // isUseableByPlayer
-    @Override public void func_70295_a() {}                                        // openChest
-    @Override public void func_70305_a() {}                                        // closeChest
-    @Override public boolean func_94041_b(int i, ItemStack s) { return true; }    // isItemValidForSlot
+    public ItemStack getCurrentItem() { return currentItem >= 0 && currentItem < mainInventory.length ? mainInventory[currentItem] : null; }
+    public boolean addItemStackToInventory(ItemStack stack) { return false; }
+    @Override public int getSizeInventory() { return mainInventory.length; }
+    @Override public ItemStack getStackInSlot(int i) { return i < mainInventory.length ? mainInventory[i] : (i - mainInventory.length < armorInventory.length ? armorInventory[i - mainInventory.length] : null); }
+    @Override public ItemStack decrStackSize(int i, int count) { return null; }
+    @Override public ItemStack getStackInSlotOnClosing(int i) { return null; }
+    @Override public void setInventorySlotContents(int i, ItemStack s) { if (i < mainInventory.length) mainInventory[i] = s; }
+    @Override public String getInvName() { return "inventory"; }
+    @Override public boolean isInvNameLocalized() { return false; }
+    @Override public int getInventoryStackLimit() { return 64; }
+    @Override public void onInventoryChanged() {}
+    @Override public boolean isUseableByPlayer(EntityPlayer p) { return true; }
+    @Override public void openChest() {}
+    @Override public void closeChest() {}
+    @Override public boolean isItemValidForSlot(int i, ItemStack s) { return true; }
 }
