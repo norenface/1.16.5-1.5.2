@@ -3,13 +3,13 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.entity.player.EntityPlayer;
 import java.util.*;
 public abstract class Container {
-    public List inventorySlots = new ArrayList();
-    protected Slot addSlotToContainer(Slot slot) { slot.slotNumber = inventorySlots.size(); inventorySlots.add(slot); return slot; }
-    public abstract boolean canInteractWith(EntityPlayer player);
-    public ItemStack slotClick(int slotId, int button, int modifier, EntityPlayer player) { return null; }
-    public ItemStack transferStackInSlot(EntityPlayer player, int slotIndex) { return null; }
-    public void detectAndSendChanges() {}
-    public Slot getSlot(int slotId) { return (Slot) inventorySlots.get(slotId); }
-    public void onContainerClosed(EntityPlayer player) {}
-    public void addCraftingToCrafters(ICrafting crafter) {}
+    public List field_75151_b = new ArrayList(); // inventorySlots
+    protected Slot func_75125_e(Slot slot) { slot.slotNumber = field_75151_b.size(); field_75151_b.add(slot); return slot; } // addSlotToContainer
+    public abstract boolean func_75145_c(EntityPlayer player); // canInteractWith
+    public ItemStack func_75140_a(int slotId, int button, int modifier, EntityPlayer player) { return null; } // slotClick
+    public ItemStack func_75150_a(EntityPlayer player, int slotIndex) { return null; } // transferStackInSlot
+    public void func_75142_b() {}  // detectAndSendChanges
+    public Slot func_75139_a(int slotId) { return (Slot) field_75151_b.get(slotId); } // getSlot
+    public void func_75134_a(EntityPlayer player) {} // onContainerClosed
+    public void func_75128_b(ICrafting crafter) {}  // addCraftingToCrafters
 }

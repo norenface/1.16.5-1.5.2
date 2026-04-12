@@ -29,9 +29,9 @@ public class GlobalItemStorageData extends WorldSavedData {
 
     // 🌟 1.5.2 用のデータ取得メソッド
     public static GlobalItemStorageData get(World world) {
-        if (world == null || world.isRemote) return null;
+        if (world == null || world.field_72995_K) return null;
 
-        MapStorage mapStorage = world.mapStorage;
+        MapStorage mapStorage = world.field_72988_C;
         GlobalItemStorageData instance = (GlobalItemStorageData) mapStorage.loadData(GlobalItemStorageData.class, DATA_NAME);
 
         if (instance == null) {
@@ -42,16 +42,16 @@ public class GlobalItemStorageData extends WorldSavedData {
     }
 
     @Override
-    public void readFromNBT(NBTTagCompound nbt) {
+    public void func_70307_a(NBTTagCompound nbt) {
         if (nbt.hasKey("InventoryData")) {
-            storage.readFromNBT(nbt.getCompoundTag("InventoryData"));
+            storage.func_70307_a(nbt.getCompoundTag("InventoryData"));
         }
     }
 
     @Override
-    public void writeToNBT(NBTTagCompound nbt) {
+    public void func_70310_b(NBTTagCompound nbt) {
         NBTTagCompound invNbt = new NBTTagCompound();
-        storage.writeToNBT(invNbt);
+        storage.func_70310_b(invNbt);
         nbt.setCompoundTag("InventoryData", invNbt);
     }
 }

@@ -5,18 +5,18 @@ import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.Packet132TileEntityData;
 import net.minecraft.world.World;
 public class TileEntity {
-    public World worldObj;
-    public int xCoord, yCoord, zCoord;
-    public boolean tileEntityInvalid;
-    public void readFromNBT(NBTTagCompound nbt) {}
-    public void writeToNBT(NBTTagCompound nbt) {}
-    public Packet getDescriptionPacket() { return null; }
-    public void onDataPacket(INetworkManager net, Packet132TileEntityData pkt) {}
-    public void onInventoryChanged() {}
+    public World field_70331_j;  // worldObj
+    public int field_70329_l, field_70330_k, field_70328_m; // xCoord, yCoord, zCoord
+    public boolean field_70332_k; // tileEntityInvalid
+    public void func_70307_a(NBTTagCompound nbt) {} // readFromNBT
+    public void func_70310_b(NBTTagCompound nbt) {} // writeToNBT
+    public Packet func_70111_a() { return null; }   // getDescriptionPacket
+    public void func_73109_a(INetworkManager net, Packet132TileEntityData pkt) {} // onDataPacket
+    public void func_70296_a() {}  // onInventoryChanged
     public void markDirty() {}
-    public boolean canUpdate() { return true; }
-    public void updateEntity() {}
-    public void invalidate() { tileEntityInvalid = true; }
-    public void validate() { tileEntityInvalid = false; }
-    public boolean isInvalid() { return tileEntityInvalid; }
+    public boolean func_70313_a() { return true; }  // canUpdate
+    public void func_70316_g() {}  // updateEntity
+    public void invalidate() { field_70332_k = true; }
+    public void validate() { field_70332_k = false; }
+    public boolean isInvalid() { return field_70332_k; }
 }
