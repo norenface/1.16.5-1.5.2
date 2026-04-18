@@ -46,70 +46,19 @@ public class ComputerBlock extends net.minecraft.block.BlockContainer {
     public boolean func_71930_a(World world, int x, int y, int z, EntityPlayer player, int side, float hitX, float hitY, float hitZ) {
 
         // 🌟 [重要] 1.5.2では、まずサーバー側かクライアント側かをはっきり分けます
+        // スニーク右クリックのみインタラクション（GUIを開く）
+        // 非スニーク時はfalseを返してバニラのブロック設置を許可する
+        if (!player.func_70093_af()) {
+            return false;
+        }
+
         if (world.field_72995_K) {
-            // クライアント側は「何もしないけど、右クリックを受け付けたよ（true）」とだけ返す
-            // これでブロックの設置（バニラの挙動）を防ぎます
             return true;
         }
 
-        // --- ここから下はサーバー側（!world.field_72995_K）のみが実行する ---
-
-        // 1. GUIを開く判定（スニーク中）
-        if (player.func_70093_af()) {
-            System.out.println("=== [DEBUG] Attempting to Open GUI on Server ===");
-            // 🌟 TSSPCMod.instance が正しく入っていることが前提です
-            player.openGui(TSSPCMod.instance, TSSPCMod.GUI_ID, world, x, y, z);
-            return true;
-        }
-
-        // 2. アイテム投入ロジック（通常右クリック）
-        TileEntity te = world.func_72796_p(x, y, z);
-        if (!(te instanceof ComputerBlockEntity)) return false;
-        ComputerBlockEntity entity = (ComputerBlockEntity) te;
-
-        long currentTime = world.func_72820_w();
-        long timeDiff = currentTime - entity.getLastClickTime();
-        int currentSlotIndex = player.field_71071_by.field_70461_c;
-
-        // 連打判定・投入ロジック
-        if (entity.getLastClickedSlotIndex() != currentSlotIndex) {
-            entity.resetClickState();
-            entity.setLastClickedSlotIndex(currentSlotIndex);
-        }
-
-        if (timeDiff < 1) return true;
-
-        if (entity.getClickCount() == 0 || timeDiff > 10) {
-            entity.resetClickState();
-            entity.setLastTransferStack(null);
-            entity.setClickCount(1);
-            entity.setLastClickedSlotIndex(currentSlotIndex);
-            this.recordAndTransfer(entity, player, 1);
-        } else {
-            int currentCount = entity.getClickCount() + 1;
-            entity.setClickCount(currentCount);
-
-            if (currentCount == 2) {
-                this.recordAndTransfer(entity, player, 64);
-            } else if (currentCount == 3) {
-                this.transferInventoryExceptHotbar(entity, player);
-                this.undoTransfer(entity, player);
-                world.func_72956_a(player, "random.orb", 0.5F, 1.0F);
-            } else if (currentCount >= 4) {
-                if (timeDiff < 3) {
-                    entity.setClickCount(3);
-                    return true;
-                }
-                this.transferAllItems(entity, player);
-                entity.resetClickState();
-                world.func_72956_a(player, "random.chestclosed", 0.5F, 0.8F);
-            }
-        }
-
-        entity.setLastClickTime(currentTime);
-        entity.func_70296_a();
-        world.func_72698_d(x, y, z);
-
+        // --- スニーク＋サーバー側：GUIを開く ---
+        System.out.println("=== [DEBUG] Attempting to Open GUI on Server ===");
+        player.openGui(TSSPCMod.instance, TSSPCMod.GUI_ID, world, x, y, z);
         return true;
     }
 
