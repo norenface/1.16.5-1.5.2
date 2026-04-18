@@ -3,8 +3,10 @@ package com.iidx.controller
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.hardware.input.InputManager
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.InputDevice
@@ -16,7 +18,6 @@ import android.widget.TextView
 
 class MainActivity : Activity(), InputManager.InputDeviceListener {
 
-    // Nullable so audio can be initialized safely on a background thread
     @Volatile private var audioEngine: AudioEngine? = null
     @Volatile private var scratchEngine: ScratchEngine? = null
 
@@ -26,7 +27,7 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
     private lateinit var tvStatus: TextView
     private val keyViews = arrayOfNulls<View>(7)
 
-    // beatmania IIDX Entry Model Bluetooth HID key mappings
+    // beatmania IIDX Entry Model Bluetooth HID key mappings (gamepad buttons)
     private val gamepadMap = mapOf(
         KeyEvent.KEYCODE_BUTTON_1 to 0,
         KeyEvent.KEYCODE_BUTTON_2 to 1,
@@ -37,7 +38,7 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         KeyEvent.KEYCODE_BUTTON_7 to 6
     )
 
-    // Fallback: keyboard 1-7 for testing without controller
+    // Keyboard 1-7 fallback (useful for testing on emulator)
     private val keyboardMap = mapOf(
         KeyEvent.KEYCODE_1 to 0,
         KeyEvent.KEYCODE_2 to 1,
@@ -57,12 +58,19 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
     private val lastAxisValues = mutableMapOf<Int, Float>()
     private val whiteKeyIndices = setOf(0, 2, 4, 6)
 
+    companion object {
+        private const val REQ_BT_PERMS = 1001
+        // Android 12+ permission strings (not in API 23 constants, use strings directly)
+        private const val PERM_BT_CONNECT = "android.permission.BLUETOOTH_CONNECT"
+        private const val PERM_BT_SCAN    = "android.permission.BLUETOOTH_SCAN"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        statusDot    = findViewById(R.id.statusDot) as View
-        tvStatus     = findViewById(R.id.tvStatus) as TextView
+        statusDot     = findViewById(R.id.statusDot)    as View
+        tvStatus      = findViewById(R.id.tvStatus)     as TextView
         turntableView = findViewById(R.id.turntableView) as TurntableView
 
         keyViews[0] = findViewById(R.id.key1) as View
@@ -79,20 +87,43 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
             startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
         }
 
-        // Initialize audio engines on a background thread to avoid blocking onCreate
+        // Initialize audio engines on a background thread to prevent blocking onCreate
         Thread {
             try {
                 audioEngine = AudioEngine()
                 scratchEngine = ScratchEngine()
-            } catch (e: Exception) {
-                e.printStackTrace()
+            } catch (t: Throwable) {
+                t.printStackTrace()
             }
         }.apply { isDaemon = true; start() }
 
         inputManager = getSystemService(Context.INPUT_SERVICE) as InputManager
         inputManager.registerInputDeviceListener(this, null)
 
-        checkConnectedDevices()
+        // Request Bluetooth permissions on Android 12+ (API 31+)
+        if (Build.VERSION.SDK_INT >= 31) {
+            val missing = arrayOf(PERM_BT_CONNECT, PERM_BT_SCAN).filter {
+                checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED
+            }
+            if (missing.isNotEmpty()) {
+                requestPermissions(missing.toTypedArray(), REQ_BT_PERMS)
+            } else {
+                checkConnectedDevices()
+            }
+        } else {
+            checkConnectedDevices()
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_BT_PERMS) {
+            checkConnectedDevices()
+        }
     }
 
     private fun setupTouchFallback() {
@@ -126,11 +157,10 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
 
     private fun isController(device: InputDevice): Boolean {
         val name = device.name.lowercase()
-        val isKnown = name.contains("iidx") || name.contains("beatmania") ||
-                      name.contains("konami")
-        val isGamepad = (device.sources and InputDevice.SOURCE_GAMEPAD) != 0 ||
-                        (device.sources and InputDevice.SOURCE_JOYSTICK) != 0
-        return isKnown || isGamepad
+        return name.contains("iidx") || name.contains("beatmania") ||
+               name.contains("konami") ||
+               (device.sources and InputDevice.SOURCE_GAMEPAD) != 0 ||
+               (device.sources and InputDevice.SOURCE_JOYSTICK) != 0
     }
 
     private fun showConnected(name: String) = runOnUiThread {
@@ -143,7 +173,7 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         tvStatus.setText(R.string.status_disconnected)
     }
 
-    // --- Key/Button input from Bluetooth HID controller ---
+    // ---- Bluetooth HID controller input ----
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (event.repeatCount > 0) return super.onKeyDown(keyCode, event)
@@ -162,7 +192,7 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         return super.onKeyUp(keyCode, event)
     }
 
-    // --- Turntable (analog axis) input ---
+    // ---- Turntable axis input ----
 
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
         val isJoystick = (event.source and InputDevice.SOURCE_JOYSTICK) != 0 ||
@@ -177,11 +207,9 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
             val delta = value - prev
             lastAxisValues[axis] = value
             if (kotlin.math.abs(delta) > kotlin.math.abs(maxDelta)) {
-                maxDelta = delta
-                turntableDelta = delta
+                maxDelta = delta; turntableDelta = delta
             }
         }
-
         if (kotlin.math.abs(turntableDelta) > 0.005f) {
             scratchEngine?.setSpeed(turntableDelta)
             turntableView.rotateDelta(turntableDelta * 360f)
@@ -189,18 +217,18 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         return true
     }
 
-    // --- Visual feedback ---
+    // ---- UI ----
 
     private fun setKeyVisual(index: Int, pressed: Boolean) = runOnUiThread {
         val view = keyViews[index] ?: return@runOnUiThread
         view.setBackgroundColor(when {
-            pressed            -> Color.parseColor("#FFCC00")
+            pressed                  -> Color.parseColor("#FFCC00")
             index in whiteKeyIndices -> Color.parseColor("#E0E0E0")
-            else               -> Color.parseColor("#1A1A1A")
+            else                     -> Color.parseColor("#1A1A1A")
         })
     }
 
-    // --- InputDeviceListener ---
+    // ---- InputDeviceListener ----
 
     override fun onInputDeviceAdded(deviceId: Int) {
         InputDevice.getDevice(deviceId)?.let { if (isController(it)) showConnected(it.name) }

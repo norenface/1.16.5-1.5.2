@@ -3,21 +3,17 @@ package com.iidx.controller
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
-import java.util.concurrent.Executors
 import kotlin.math.*
 
 /**
- * Synthesizes piano-like tones for the 7 IIDX buttons.
- * Each button maps to a note in a minor pentatonic scale tuned for DJ music.
+ * Synthesizes piano-like tones for 7 IIDX buttons.
+ * Uses pre-created static AudioTracks with reloadStaticData() for replaying.
  */
 class AudioEngine {
 
     private val sampleRate = 44100
-    private val executor = Executors.newFixedThreadPool(4)
 
-    // Notes for keys 1-7: A minor pentatonic + octave
-    // White keys: A3, C4, D4, E4, A4 mapped to positions 0,2,4,6
-    // Black keys: C4, Eb4, G4 mapped to positions 1,3,5
+    // A minor pentatonic scale across 7 keys
     private val noteFrequencies = floatArrayOf(
         220.00f,  // Key 1 (white) A3
         261.63f,  // Key 2 (black) C4
@@ -28,93 +24,85 @@ class AudioEngine {
         440.00f   // Key 7 (white) A4
     )
 
-    private val noteBuffers: Array<ShortArray> = Array(7) { i ->
-        synthesizeNote(noteFrequencies[i], durationMs = 1200)
+    private val tracks = arrayOfNulls<AudioTrack>(7)
+
+    init {
+        for (i in 0..6) {
+            try {
+                val buffer = synthesizeNote(noteFrequencies[i])
+                val track = AudioTrack.Builder()
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_GAME)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build()
+                    )
+                    .setAudioFormat(
+                        AudioFormat.Builder()
+                            .setSampleRate(sampleRate)
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                            .build()
+                    )
+                    .setBufferSizeInBytes(buffer.size * 2)
+                    .setTransferMode(AudioTrack.MODE_STATIC)
+                    .build()
+                track.write(buffer, 0, buffer.size)
+                tracks[i] = track
+            } catch (t: Throwable) {
+                t.printStackTrace()
+            }
+        }
     }
 
-    /**
-     * Synthesizes a piano-like tone with ADSR envelope and harmonics.
-     */
-    private fun synthesizeNote(freq: Float, durationMs: Int): ShortArray {
-        val numSamples = sampleRate * durationMs / 1000
-        val buf = ShortArray(numSamples)
+    private fun synthesizeNote(freq: Float, durationMs: Int = 1200): ShortArray {
+        val n = sampleRate * durationMs / 1000
+        val buf = ShortArray(n)
+        val attack  = (sampleRate * 0.008).toInt()
+        val decay   = (sampleRate * 0.12).toInt()
+        val sustain = 0.55
+        val release = (sampleRate * 0.35).toInt()
 
-        val attackSamples  = (sampleRate * 0.008).toInt()  // 8ms attack
-        val decaySamples   = (sampleRate * 0.12).toInt()   // 120ms decay
-        val sustainLevel   = 0.55
-        val releaseSamples = (sampleRate * 0.35).toInt()   // 350ms release
-
-        for (i in 0 until numSamples) {
+        for (i in 0 until n) {
             val t = i.toDouble() / sampleRate
-
             val env = when {
-                i < attackSamples ->
-                    i.toDouble() / attackSamples
-                i < attackSamples + decaySamples ->
-                    1.0 - (1.0 - sustainLevel) * (i - attackSamples).toDouble() / decaySamples
-                i < numSamples - releaseSamples ->
-                    sustainLevel
-                else ->
-                    sustainLevel * (numSamples - i).toDouble() / releaseSamples
+                i < attack               -> i.toDouble() / attack
+                i < attack + decay       -> 1.0 - (1.0 - sustain) * (i - attack).toDouble() / decay
+                i < n - release          -> sustain
+                else                     -> sustain * (n - i).toDouble() / release
             }.coerceIn(0.0, 1.0)
 
-            // Fundamental + harmonics (piano timbre)
-            val f1 = sin(2.0 * PI * freq      * t)
-            val f2 = sin(2.0 * PI * freq * 2  * t) * 0.45
-            val f3 = sin(2.0 * PI * freq * 3  * t) * 0.20
-            val f4 = sin(2.0 * PI * freq * 4  * t) * 0.10
-            val f5 = sin(2.0 * PI * freq * 6  * t) * 0.04
+            val wave = sin(2.0 * PI * freq * t) +
+                       sin(2.0 * PI * freq * 2 * t) * 0.45 +
+                       sin(2.0 * PI * freq * 3 * t) * 0.20 +
+                       sin(2.0 * PI * freq * 4 * t) * 0.10
 
-            val sample = env * (f1 + f2 + f3 + f4 + f5) / 1.79
-            buf[i] = (sample * 28000).toInt()
+            buf[i] = (env * wave / 1.75 * 28000)
+                .toInt()
                 .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
                 .toShort()
         }
         return buf
     }
 
-    /**
-     * Plays the note for button [index] (0-6) on a background thread.
-     */
     fun playButton(index: Int) {
         if (index !in 0..6) return
-        val buffer = noteBuffers[index]
-
-        executor.submit {
-            val minBuf = AudioTrack.getMinBufferSize(
-                sampleRate,
-                AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
-            )
-            val track = AudioTrack(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_GAME)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build(),
-                AudioFormat.Builder()
-                    .setSampleRate(sampleRate)
-                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                    .build(),
-                maxOf(buffer.size * 2, minBuf),
-                AudioTrack.MODE_STATIC,
-                android.media.AudioManager.AUDIO_SESSION_ID_GENERATE
-            )
-            track.write(buffer, 0, buffer.size)
+        try {
+            val track = tracks[index] ?: return
+            // Stop any current playback, rewind, and play again
+            if (track.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                track.stop()
+            }
+            track.reloadStaticData()
             track.play()
-            // Playback completes; release on notification listener
-            track.setPlaybackPositionUpdateListener(object :
-                AudioTrack.OnPlaybackPositionUpdateListener {
-                override fun onMarkerReached(t: AudioTrack) {
-                    t.release()
-                }
-                override fun onPeriodicNotification(t: AudioTrack) {}
-            })
-            track.notificationMarkerPosition = buffer.size - 1
+        } catch (t: Throwable) {
+            t.printStackTrace()
         }
     }
 
     fun release() {
-        executor.shutdown()
+        for (track in tracks) {
+            try { track?.stop(); track?.release() } catch (_: Throwable) {}
+        }
     }
 }
