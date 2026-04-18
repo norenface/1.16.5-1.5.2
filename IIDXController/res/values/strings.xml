@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">IIDX Music Controller</string>
+    <string name="app_name">専コン接続アプリ</string>
     <string name="status_disconnected">未接続 — コントローラーをペアリングしてください</string>
     <string name="status_connected">接続済み: </string>
     <string name="btn_open_bt">Bluetooth設定</string>

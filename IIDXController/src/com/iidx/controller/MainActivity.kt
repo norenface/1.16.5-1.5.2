@@ -1,7 +1,6 @@
 package com.iidx.controller
 
 import android.app.Activity
-import android.bluetooth.BluetoothAdapter
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -17,17 +16,17 @@ import android.widget.TextView
 
 class MainActivity : Activity(), InputManager.InputDeviceListener {
 
-    private lateinit var audioEngine: AudioEngine
-    private lateinit var scratchEngine: ScratchEngine
-    private lateinit var inputManager: InputManager
+    // Nullable so audio can be initialized safely on a background thread
+    @Volatile private var audioEngine: AudioEngine? = null
+    @Volatile private var scratchEngine: ScratchEngine? = null
 
+    private lateinit var inputManager: InputManager
     private lateinit var turntableView: TurntableView
     private lateinit var statusDot: View
     private lateinit var tvStatus: TextView
     private val keyViews = arrayOfNulls<View>(7)
 
     // beatmania IIDX Entry Model Bluetooth HID key mappings
-    // Primary: standard gamepad buttons
     private val gamepadMap = mapOf(
         KeyEvent.KEYCODE_BUTTON_1 to 0,
         KeyEvent.KEYCODE_BUTTON_2 to 1,
@@ -38,7 +37,7 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         KeyEvent.KEYCODE_BUTTON_7 to 6
     )
 
-    // Fallback: keyboard 1-7 for testing
+    // Fallback: keyboard 1-7 for testing without controller
     private val keyboardMap = mapOf(
         KeyEvent.KEYCODE_1 to 0,
         KeyEvent.KEYCODE_2 to 1,
@@ -49,23 +48,21 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         KeyEvent.KEYCODE_7 to 6
     )
 
-    // Track which axis is the turntable
-    private val lastAxisValues = mutableMapOf<Int, Float>()
     private val TURNTABLE_AXES = intArrayOf(
         MotionEvent.AXIS_X, MotionEvent.AXIS_Y,
         MotionEvent.AXIS_Z, MotionEvent.AXIS_RZ,
         MotionEvent.AXIS_RX, MotionEvent.AXIS_RY,
         MotionEvent.AXIS_HAT_X, MotionEvent.AXIS_HAT_Y
     )
-
+    private val lastAxisValues = mutableMapOf<Int, Float>()
     private val whiteKeyIndices = setOf(0, 2, 4, 6)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        statusDot = findViewById(R.id.statusDot) as View
-        tvStatus = findViewById(R.id.tvStatus) as TextView
+        statusDot    = findViewById(R.id.statusDot) as View
+        tvStatus     = findViewById(R.id.tvStatus) as TextView
         turntableView = findViewById(R.id.turntableView) as TurntableView
 
         keyViews[0] = findViewById(R.id.key1) as View
@@ -82,8 +79,15 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
             startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
         }
 
-        audioEngine = AudioEngine()
-        scratchEngine = ScratchEngine()
+        // Initialize audio engines on a background thread to avoid blocking onCreate
+        Thread {
+            try {
+                audioEngine = AudioEngine()
+                scratchEngine = ScratchEngine()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }.apply { isDaemon = true; start() }
 
         inputManager = getSystemService(Context.INPUT_SERVICE) as InputManager
         inputManager.registerInputDeviceListener(this, null)
@@ -94,17 +98,16 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
     private fun setupTouchFallback() {
         for (i in 0..6) {
             val view = keyViews[i] ?: continue
-            val buttonIndex = i
-            view.setOnTouchListener { v, event ->
+            val idx = i
+            view.setOnTouchListener { _, event ->
                 when (event.action) {
-                    android.view.MotionEvent.ACTION_DOWN -> {
-                        audioEngine.playButton(buttonIndex)
-                        setKeyVisual(buttonIndex, true)
+                    MotionEvent.ACTION_DOWN -> {
+                        audioEngine?.playButton(idx)
+                        setKeyVisual(idx, true)
                         true
                     }
-                    android.view.MotionEvent.ACTION_UP,
-                    android.view.MotionEvent.ACTION_CANCEL -> {
-                        setKeyVisual(buttonIndex, false)
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        setKeyVisual(idx, false)
                         true
                     }
                     else -> false
@@ -116,10 +119,7 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
     private fun checkConnectedDevices() {
         for (id in InputDevice.getDeviceIds()) {
             val device = InputDevice.getDevice(id) ?: continue
-            if (isController(device)) {
-                showConnected(device.name)
-                return
-            }
+            if (isController(device)) { showConnected(device.name); return }
         }
         showDisconnected()
     }
@@ -133,18 +133,14 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         return isKnown || isGamepad
     }
 
-    private fun showConnected(deviceName: String) {
-        runOnUiThread {
-            statusDot.setBackgroundColor(Color.parseColor("#00CC44"))
-            tvStatus.text = "${getString(R.string.status_connected)}$deviceName"
-        }
+    private fun showConnected(name: String) = runOnUiThread {
+        statusDot.setBackgroundColor(Color.parseColor("#00CC44"))
+        tvStatus.text = "${getString(R.string.status_connected)}$name"
     }
 
-    private fun showDisconnected() {
-        runOnUiThread {
-            statusDot.setBackgroundColor(Color.parseColor("#CC2200"))
-            tvStatus.setText(R.string.status_disconnected)
-        }
+    private fun showDisconnected() = runOnUiThread {
+        statusDot.setBackgroundColor(Color.parseColor("#CC2200"))
+        tvStatus.setText(R.string.status_disconnected)
     }
 
     // --- Key/Button input from Bluetooth HID controller ---
@@ -153,7 +149,7 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         if (event.repeatCount > 0) return super.onKeyDown(keyCode, event)
         val idx = gamepadMap[keyCode] ?: keyboardMap[keyCode]
         if (idx != null) {
-            audioEngine.playButton(idx)
+            audioEngine?.playButton(idx)
             setKeyVisual(idx, true)
             return true
         }
@@ -162,10 +158,7 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
         val idx = gamepadMap[keyCode] ?: keyboardMap[keyCode]
-        if (idx != null) {
-            setKeyVisual(idx, false)
-            return true
-        }
+        if (idx != null) { setKeyVisual(idx, false); return true }
         return super.onKeyUp(keyCode, event)
     }
 
@@ -178,10 +171,9 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
 
         var maxDelta = 0f
         var turntableDelta = 0f
-
         for (axis in TURNTABLE_AXES) {
             val value = event.getAxisValue(axis)
-            val prev = lastAxisValues.getOrElse(axis) { 0f }
+            val prev  = lastAxisValues.getOrElse(axis) { 0f }
             val delta = value - prev
             lastAxisValues[axis] = value
             if (kotlin.math.abs(delta) > kotlin.math.abs(maxDelta)) {
@@ -191,46 +183,35 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         }
 
         if (kotlin.math.abs(turntableDelta) > 0.005f) {
-            scratchEngine.setSpeed(turntableDelta)
+            scratchEngine?.setSpeed(turntableDelta)
             turntableView.rotateDelta(turntableDelta * 360f)
         }
-
         return true
     }
 
     // --- Visual feedback ---
 
-    private fun setKeyVisual(index: Int, pressed: Boolean) {
-        runOnUiThread {
-            val view = keyViews[index] ?: return@runOnUiThread
-            val isWhite = index in whiteKeyIndices
-            view.setBackgroundColor(
-                when {
-                    pressed -> Color.parseColor("#FFCC00")
-                    isWhite -> Color.parseColor("#E0E0E0")
-                    else    -> Color.parseColor("#1A1A1A")
-                }
-            )
-        }
+    private fun setKeyVisual(index: Int, pressed: Boolean) = runOnUiThread {
+        val view = keyViews[index] ?: return@runOnUiThread
+        view.setBackgroundColor(when {
+            pressed            -> Color.parseColor("#FFCC00")
+            index in whiteKeyIndices -> Color.parseColor("#E0E0E0")
+            else               -> Color.parseColor("#1A1A1A")
+        })
     }
 
     // --- InputDeviceListener ---
 
     override fun onInputDeviceAdded(deviceId: Int) {
-        val device = InputDevice.getDevice(deviceId) ?: return
-        if (isController(device)) showConnected(device.name)
+        InputDevice.getDevice(deviceId)?.let { if (isController(it)) showConnected(it.name) }
     }
-
-    override fun onInputDeviceRemoved(deviceId: Int) {
-        showDisconnected()
-    }
-
+    override fun onInputDeviceRemoved(deviceId: Int) = showDisconnected()
     override fun onInputDeviceChanged(deviceId: Int) {}
 
     override fun onDestroy() {
         super.onDestroy()
         inputManager.unregisterInputDeviceListener(this)
-        audioEngine.release()
-        scratchEngine.release()
+        audioEngine?.release()
+        scratchEngine?.release()
     }
 }
