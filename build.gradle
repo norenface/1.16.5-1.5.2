@@ -65,7 +65,6 @@ jar {
     }
     manifest {
         attributes(
-            'FMLCorePlugin': 'com.tss.pc.TSSPCMod',
             'Mod-Version': project.version
         )
     }
