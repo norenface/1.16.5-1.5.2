@@ -35,16 +35,25 @@ $AAPT2 link \
 
 echo "      R.java: $(find "$BUILD_DIR/gen" -name "R.java")"
 
-# --- Step 2: Compile Kotlin sources ---
+# --- Step 2: Compile sources ---
+# 2a. Compile R.java with javac first (kotlinc does NOT output .class for Java files)
+echo "[2/6] Compiling R.java with javac..."
+javac \
+    -classpath "$ANDROID_JAR" \
+    -source 1.8 -target 1.8 \
+    -d "$BUILD_DIR/obj" \
+    $(find "$BUILD_DIR/gen" -name "*.java")
+echo "      R classes: $(find "$BUILD_DIR/obj" -name "R*.class" | wc -l)"
+
+# 2b. Compile Kotlin sources, with R class already on the classpath
 echo "[2/6] Compiling Kotlin sources..."
 $KOTLINC \
     $(find "$PROJECT_DIR/src" -name "*.kt") \
-    $(find "$BUILD_DIR/gen" -name "*.java") \
-    -classpath "$ANDROID_JAR" \
+    -classpath "$ANDROID_JAR:$BUILD_DIR/obj" \
     -jvm-target 1.8 \
     -d "$BUILD_DIR/obj" 2>&1
 
-echo "      Compiled: $(find "$BUILD_DIR/obj" -name "*.class" | wc -l) classes"
+echo "      Total compiled: $(find "$BUILD_DIR/obj" -name "*.class" | wc -l) classes"
 
 # --- Step 3: Dex ---
 echo "[3/6] Converting bytecode to DEX..."
