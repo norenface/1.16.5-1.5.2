@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_dark"
+    android:padding="8dp">
+
+    <!-- Title bar -->
+    <LinearLayout
+        android:id="@+id/titleBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_alignParentTop="true">
+
+        <View
+            android:id="@+id/statusDot"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:background="@color/status_disconnected" />
+
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/status_disconnected"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:layout_marginStart="6dp" />
+
+        <Button
+            android:id="@+id/btnBluetooth"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/btn_open_bt"
+            android:textColor="@color/text_primary"
+            android:textSize="11sp"
+            android:padding="6dp"
+            android:background="@color/accent" />
+    </LinearLayout>
+
+    <!-- Main content: turntable left, keys right -->
+    <LinearLayout
+        android:id="@+id/mainContent"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/titleBar"
+        android:layout_marginTop="4dp"
+        android:orientation="horizontal">
+
+        <!-- Turntable area -->
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="3">
+
+            <com.iidx.controller.TurntableView
+                android:id="@+id/turntableView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+        </FrameLayout>
+
+        <!-- 7-button panel -->
+        <LinearLayout
+            android:id="@+id/keysPanel"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="4"
+            android:orientation="horizontal"
+            android:layout_marginStart="8dp"
+            android:gravity="center_vertical">
+
+            <!-- Buttons 1-7 rendered dynamically in code -->
+            <View android:id="@+id/key1" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="2dp" android:background="@color/key_white" />
+            <View android:id="@+id/key2" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="2dp" android:background="@color/key_black" />
+            <View android:id="@+id/key3" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="2dp" android:background="@color/key_white" />
+            <View android:id="@+id/key4" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="2dp" android:background="@color/key_black" />
+            <View android:id="@+id/key5" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="2dp" android:background="@color/key_white" />
+            <View android:id="@+id/key6" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="2dp" android:background="@color/key_black" />
+            <View android:id="@+id/key7" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="2dp" android:background="@color/key_white" />
+        </LinearLayout>
+    </LinearLayout>
+</RelativeLayout>
