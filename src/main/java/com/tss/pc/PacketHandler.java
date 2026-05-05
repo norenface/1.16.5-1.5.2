@@ -153,9 +153,9 @@ public class PacketHandler implements IPacketHandler {
                         System.out.println("SERVER: Tab Icon CLEARED for index " + index);
                     }
 
-                    if (te.field_70331_j != null) {
+                    if (te.worldObj != null) {
                         te.func_70296_a();
-                        te.field_70331_j.func_72698_d(te.field_70329_l, te.field_70330_k, te.field_70328_m);
+                        te.worldObj.func_72698_d(te.field_70329_l, te.field_70330_k, te.field_70328_m);
                     }
                 }
                 break;
@@ -197,9 +197,9 @@ public class PacketHandler implements IPacketHandler {
 
                     // 🌟 2. TileEntity の変更を通知（これがないとクライアントにパケットが飛ばない）
                     te.func_70296_a();
-                    if (te.field_70331_j != null) {
+                    if (te.worldObj != null) {
                         // クライアントへ TileEntity の NBT データを再送させる
-                        te.field_70331_j.func_72698_d(te.field_70329_l, te.field_70330_k, te.field_70328_m);
+                        te.worldObj.func_72698_d(te.field_70329_l, te.field_70330_k, te.field_70328_m);
                     }
 
                     System.out.println("SERVER: Added Row. Current Total Slots: " + tab.slots.size());
@@ -238,9 +238,9 @@ public class PacketHandler implements IPacketHandler {
         // 🌟 1.5.2での同期 (te. 経由で呼ぶことで worldObj エラーを回避)
         te.func_70296_a();
 
-        if (te.field_70331_j != null) {
+        if (te.worldObj != null) {
             // サーバーからクライアントへ「データ送って！」と通知する命令
-            te.field_70331_j.func_72698_d(te.field_70329_l, te.field_70330_k, te.field_70328_m);
+            te.worldObj.func_72698_d(te.field_70329_l, te.field_70330_k, te.field_70328_m);
         }
 
         // UIの表示更新

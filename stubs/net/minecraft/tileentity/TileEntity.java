@@ -5,7 +5,7 @@ import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.Packet132TileEntityData;
 import net.minecraft.world.World;
 public class TileEntity {
-    public World field_70331_j;  // worldObj
+    public World worldObj;         // worldObj (Forge exposes as human-readable)
     public int field_70329_l, field_70330_k, field_70328_m; // xCoord, yCoord, zCoord
     public boolean field_70332_k; // tileEntityInvalid
     public void func_70307_a(NBTTagCompound nbt) {} // readFromNBT
