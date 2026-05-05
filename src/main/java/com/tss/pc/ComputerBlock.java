@@ -29,6 +29,11 @@ public class ComputerBlock extends net.minecraft.block.BlockContainer {
         return new ComputerBlockEntity();
     }
 
+    @Override
+    public TileEntity createTileEntity(World world, int metadata) {
+        return new ComputerBlockEntity();
+    }
+
     // スニーク右クリック時の「アイテム設置」をブロック側から拒否する
    // @Override
   //  public boolean isItemStackInvalidForSlot(int slot, ItemStack stack) {

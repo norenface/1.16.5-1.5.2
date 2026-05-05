@@ -25,7 +25,8 @@ public class Block {
     public Block func_71908_c(String name) { return this; }          // setUnlocalizedName
     public Block func_71905_a(CreativeTabs tab) { return this; }     // setCreativeTab
     public boolean func_71880_b(int metadata) { return false; }      // hasTileEntity
-    public TileEntity func_71916_a(World world) { return null; }     // createNewTileEntity
+    public TileEntity func_71916_a(World world) { return null; }     // createNewTileEntity (vanilla SRG)
+    public TileEntity createTileEntity(World world, int metadata) { return null; } // Forge-added
     public boolean func_71930_a(World world, int x, int y, int z, EntityPlayer player, int side, float hitX, float hitY, float hitZ) { return false; } // onBlockActivated
     public boolean func_71917_g(World world, int x, int y, int z) { return true; } // canPlaceBlockAt
     public Icon func_71874_a(int side, int metadata) { return blockIcon; }  // getIcon
