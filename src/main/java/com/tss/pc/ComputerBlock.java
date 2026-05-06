@@ -47,22 +47,14 @@ public class ComputerBlock extends net.minecraft.block.BlockContainer {
         return super.func_71917_g(world, x, y, z);
     }
     // --- 1.5.2 の右クリック処理 ---
+    // 1.5.2ではスニーク中はバニラがonBlockActivatedをスキップするため、
+    // 通常の右クリックでGUIを開く（チェストや炉と同じ挙動）
     @Override
     public boolean func_71930_a(World world, int x, int y, int z, EntityPlayer player, int side, float hitX, float hitY, float hitZ) {
-
-        // 🌟 [重要] 1.5.2では、まずサーバー側かクライアント側かをはっきり分けます
-        // スニーク右クリックのみインタラクション（GUIを開く）
-        // 非スニーク時はfalseを返してバニラのブロック設置を許可する
-        if (!player.func_70093_af()) {
-            return false;
-        }
-
         if (world.field_72995_K) {
             return true;
         }
-
-        // --- スニーク＋サーバー側：GUIを開く ---
-        System.out.println("=== [DEBUG] Attempting to Open GUI on Server ===");
+        System.out.println("=== [DEBUG] Opening GUI on Server ===");
         player.openGui(TSSPCMod.instance, TSSPCMod.GUI_ID, world, x, y, z);
         return true;
     }

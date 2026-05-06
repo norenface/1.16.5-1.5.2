@@ -13,6 +13,32 @@ import java.util.*;
 
 public class ComputerBlockEntity extends TileEntity {
 
+    // worldObjのフィールド名は実行時にリフレクションで検索する（SRG名もMCP名も不明なため）
+    private static java.lang.reflect.Field tileEntityWorldField;
+    static {
+        try {
+            for (java.lang.reflect.Field f : TileEntity.class.getDeclaredFields()) {
+                if (f.getType() == net.minecraft.world.World.class) {
+                    f.setAccessible(true);
+                    tileEntityWorldField = f;
+                    System.out.println("DEBUG: [TSSPC] TileEntity worldObj field = " + f.getName());
+                    break;
+                }
+            }
+            if (tileEntityWorldField == null) {
+                System.out.println("DEBUG: [TSSPC] WARNING: worldObj not found in TileEntity!");
+            }
+        } catch (Exception e) {
+            System.out.println("DEBUG: [TSSPC] worldObj search error: " + e);
+        }
+    }
+
+    protected net.minecraft.world.World getWorldObj() {
+        if (tileEntityWorldField == null) return null;
+        try { return (net.minecraft.world.World) tileEntityWorldField.get(this); }
+        catch (Exception e) { return null; }
+    }
+
     // --- クリック管理用変数 ---
     private int clickCount = 0;
     private long lastClickTime = 0;
@@ -99,8 +125,8 @@ public class ComputerBlockEntity extends TileEntity {
 
             // クライアント側に「在庫が減ったよ」と同期するために
             // 1.5.2では世界（worldObj）のマーク更新を行うのが一般的です
-            if (this.worldObj != null) {
-                this.worldObj.func_72698_d(this.field_70329_l, this.field_70330_k, this.field_70328_m);
+            if (this.getWorldObj() != null) {
+                this.getWorldObj().func_72698_d(this.field_70329_l, this.field_70330_k, this.field_70328_m);
             }
         }
 
@@ -109,15 +135,15 @@ public class ComputerBlockEntity extends TileEntity {
 
     public BulkItemStorage getBulkStorage() {
         // worldObj が null（初期化前）の場合は空のストレージを返す
-        if (this.worldObj == null) {
+        if (this.getWorldObj() == null) {
             if (this.clientSideStorage == null) this.clientSideStorage = new BulkItemStorage();
             return this.clientSideStorage;
         }
 
         // 🌟 サーバー側の場合
-        if (!this.worldObj.field_72995_K) {
+        if (!this.getWorldObj().field_72995_K) {
             // GlobalItemStorageData.get(world) を呼ぶ
-            GlobalItemStorageData data = GlobalItemStorageData.get(this.worldObj);
+            GlobalItemStorageData data = GlobalItemStorageData.get(this.getWorldObj());
             if (data != null) {
                 return data.getStorage();
             }
@@ -175,8 +201,8 @@ public class ComputerBlockEntity extends TileEntity {
     @Override
     public void func_70310_b(net.minecraft.nbt.NBTTagCompound nbt) {
         super.func_70310_b(nbt);
-        if (this.worldObj != null && !this.worldObj.field_72995_K) {
-            GlobalItemStorageData.get(this.worldObj).markDirty();
+        if (this.getWorldObj() != null && !this.getWorldObj().field_72995_K) {
+            GlobalItemStorageData.get(this.getWorldObj()).markDirty();
         }
 
         // 🌟 プレイヤーごとのタブデータを保存
@@ -231,7 +257,7 @@ public class ComputerBlockEntity extends TileEntity {
         this.func_70307_a(pkt.customParam1);
 
         // 2. もしGUIを開いていたら、スロットを最新状態にリフレッシュする
-        if (this.worldObj.field_72995_K) { // クライアント側であることを確認
+        if (this.getWorldObj().field_72995_K) { // クライアント側であることを確認
             updateGuiClient();
         }
     }
@@ -268,8 +294,8 @@ public class ComputerBlockEntity extends TileEntity {
                 this.func_70296_a();
 
                 // クライアントへ同期
-                if (this.worldObj != null) {
-                    this.worldObj.func_72698_d(this.field_70329_l, this.field_70330_k, this.field_70328_m);
+                if (this.getWorldObj() != null) {
+                    this.getWorldObj().func_72698_d(this.field_70329_l, this.field_70330_k, this.field_70328_m);
                 }
             }
         }
@@ -284,8 +310,8 @@ public class ComputerBlockEntity extends TileEntity {
                 tab.slots.set(slotIndex, null);
                 this.func_70296_a();
 
-                if (this.worldObj != null) {
-                    this.worldObj.func_72698_d(this.field_70329_l, this.field_70330_k, this.field_70328_m);
+                if (this.getWorldObj() != null) {
+                    this.getWorldObj().func_72698_d(this.field_70329_l, this.field_70330_k, this.field_70328_m);
                 }
             }
         }
