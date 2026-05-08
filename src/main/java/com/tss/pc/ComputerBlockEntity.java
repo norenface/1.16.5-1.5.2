@@ -39,6 +39,95 @@ public class ComputerBlockEntity extends TileEntity {
         catch (Exception e) { return null; }
     }
 
+    // === NBT SRG名メソッドをリフレクションでキャッシュ ===
+    private static java.lang.reflect.Method nbtSetTagMethod;
+    private static java.lang.reflect.Method nbtGetTagListMethod;
+    private static java.lang.reflect.Method nbtGetCompoundTagMethod;
+    private static java.lang.reflect.Method nbtAppendTagMethod;
+    private static java.lang.reflect.Method nbtTagAtMethod;
+    private static java.lang.reflect.Method nbtTagCountMethod;
+    static {
+        Class<?> cNbtCompound = net.minecraft.nbt.NBTTagCompound.class;
+        Class<?> cNbtList = net.minecraft.nbt.NBTTagList.class;
+        Class<?> cNbtBase = net.minecraft.nbt.NBTBase.class;
+        try {
+            for (java.lang.reflect.Method m : cNbtCompound.getMethods()) {
+                Class<?>[] p = m.getParameterTypes();
+                if (p.length == 2 && p[0] == String.class && p[1] == cNbtBase && m.getReturnType() == void.class) {
+                    nbtSetTagMethod = m;
+                    System.out.println("DEBUG: [TSSPC] NBT setTag = " + m.getName()); break;
+                }
+            }
+        } catch (Exception e) { System.out.println("DEBUG: [TSSPC] setTag err: " + e); }
+        try {
+            for (java.lang.reflect.Method m : cNbtCompound.getMethods()) {
+                Class<?>[] p = m.getParameterTypes();
+                if (p.length == 1 && p[0] == String.class && m.getReturnType() == cNbtList) {
+                    nbtGetTagListMethod = m;
+                    System.out.println("DEBUG: [TSSPC] NBT getTagList = " + m.getName()); break;
+                }
+            }
+        } catch (Exception e) { System.out.println("DEBUG: [TSSPC] getTagList err: " + e); }
+        try {
+            for (java.lang.reflect.Method m : cNbtCompound.getMethods()) {
+                Class<?>[] p = m.getParameterTypes();
+                if (p.length == 1 && p[0] == String.class && m.getReturnType() == cNbtCompound) {
+                    nbtGetCompoundTagMethod = m;
+                    System.out.println("DEBUG: [TSSPC] NBT getCompoundTag = " + m.getName()); break;
+                }
+            }
+        } catch (Exception e) { System.out.println("DEBUG: [TSSPC] getCompoundTag err: " + e); }
+        try {
+            for (java.lang.reflect.Method m : cNbtList.getMethods()) {
+                Class<?>[] p = m.getParameterTypes();
+                if (p.length == 1 && p[0] == cNbtBase && m.getReturnType() == void.class) {
+                    nbtAppendTagMethod = m;
+                    System.out.println("DEBUG: [TSSPC] NBT appendTag = " + m.getName()); break;
+                }
+            }
+        } catch (Exception e) { System.out.println("DEBUG: [TSSPC] appendTag err: " + e); }
+        try {
+            for (java.lang.reflect.Method m : cNbtList.getMethods()) {
+                Class<?>[] p = m.getParameterTypes();
+                if (p.length == 1 && p[0] == int.class && cNbtBase.isAssignableFrom(m.getReturnType())) {
+                    nbtTagAtMethod = m;
+                    System.out.println("DEBUG: [TSSPC] NBT tagAt = " + m.getName()); break;
+                }
+            }
+        } catch (Exception e) { System.out.println("DEBUG: [TSSPC] tagAt err: " + e); }
+        try {
+            for (java.lang.reflect.Method m : cNbtList.getMethods()) {
+                Class<?>[] p = m.getParameterTypes();
+                if (p.length == 0 && m.getReturnType() == int.class && !m.getName().equals("hashCode")) {
+                    nbtTagCountMethod = m;
+                    System.out.println("DEBUG: [TSSPC] NBT tagCount = " + m.getName()); break;
+                }
+            }
+        } catch (Exception e) { System.out.println("DEBUG: [TSSPC] tagCount err: " + e); }
+    }
+    private static void nbtSetTag(NBTTagCompound nbt, String key, net.minecraft.nbt.NBTBase val) {
+        if (nbtSetTagMethod != null) try { nbtSetTagMethod.invoke(nbt, key, val); } catch (Exception e) { System.out.println("DEBUG: [TSSPC] nbtSetTag err: " + e); }
+    }
+    private static NBTTagList nbtGetTagList(NBTTagCompound nbt, String key) {
+        if (nbtGetTagListMethod != null) try { return (NBTTagList) nbtGetTagListMethod.invoke(nbt, key); } catch (Exception e) { System.out.println("DEBUG: [TSSPC] nbtGetTagList err: " + e); }
+        return new NBTTagList();
+    }
+    private static NBTTagCompound nbtGetCompoundTag(NBTTagCompound nbt, String key) {
+        if (nbtGetCompoundTagMethod != null) try { return (NBTTagCompound) nbtGetCompoundTagMethod.invoke(nbt, key); } catch (Exception e) { System.out.println("DEBUG: [TSSPC] nbtGetCompoundTag err: " + e); }
+        return new NBTTagCompound();
+    }
+    private static void nbtAppendTag(NBTTagList list, net.minecraft.nbt.NBTBase val) {
+        if (nbtAppendTagMethod != null) try { nbtAppendTagMethod.invoke(list, val); } catch (Exception e) { System.out.println("DEBUG: [TSSPC] nbtAppendTag err: " + e); }
+    }
+    private static net.minecraft.nbt.NBTBase nbtTagAt(NBTTagList list, int i) {
+        if (nbtTagAtMethod != null) try { return (net.minecraft.nbt.NBTBase) nbtTagAtMethod.invoke(list, i); } catch (Exception e) { System.out.println("DEBUG: [TSSPC] nbtTagAt err: " + e); }
+        return null;
+    }
+    private static int nbtTagCount(NBTTagList list) {
+        if (nbtTagCountMethod != null) try { return (Integer) nbtTagCountMethod.invoke(list); } catch (Exception e) { System.out.println("DEBUG: [TSSPC] nbtTagCount err: " + e); }
+        return 0;
+    }
+
     // --- クリック管理用変数 ---
     private int clickCount = 0;
     private long lastClickTime = 0;
@@ -169,25 +258,28 @@ public class ComputerBlockEntity extends TileEntity {
 
         // 🌟 プレイヤーごとのタブデータを復元
         this.playerTabs.clear();
-        NBTTagList playersList = nbt.getTagList("PlayerTabData");
-        for (int i = 0; i < playersList.tagCount(); i++) {
-            NBTTagCompound playerTag = (NBTTagCompound) playersList.tagAt(i);
+        NBTTagList playersList = nbtGetTagList(nbt, "PlayerTabData");
+        for (int i = 0; i < nbtTagCount(playersList); i++) {
+            NBTTagCompound playerTag = (NBTTagCompound) nbtTagAt(playersList, i);
+            if (playerTag == null) continue;
             String playerName = playerTag.getString("PlayerName");
 
             List<FavoriteTab> tabs = new ArrayList<FavoriteTab>();
-            NBTTagList tabList = playerTag.getTagList("Tabs");
-            for (int j = 0; j < tabList.tagCount(); j++) {
-                NBTTagCompound tabTag = (NBTTagCompound) tabList.tagAt(j);
+            NBTTagList tabList = nbtGetTagList(playerTag, "Tabs");
+            for (int j = 0; j < nbtTagCount(tabList); j++) {
+                NBTTagCompound tabTag = (NBTTagCompound) nbtTagAt(tabList, j);
+                if (tabTag == null) continue;
                 FavoriteTab tab = new FavoriteTab(tabTag.getString("TabName"));
 
                 if (tabTag.hasKey("Icon")) {
-                    tab.icon = ItemStack.loadItemStackFromNBT(tabTag.getCompoundTag("Icon"));
+                    tab.icon = ItemStack.loadItemStackFromNBT(nbtGetCompoundTag(tabTag, "Icon"));
                 }
 
                 // 🌟 スロットの復元
-                NBTTagList slotList = tabTag.getTagList("Slots");
-                for (int k = 0; k < slotList.tagCount(); k++) {
-                    NBTTagCompound slotTag = (NBTTagCompound) slotList.tagAt(k);
+                NBTTagList slotList = nbtGetTagList(tabTag, "Slots");
+                for (int k = 0; k < nbtTagCount(slotList); k++) {
+                    NBTTagCompound slotTag = (NBTTagCompound) nbtTagAt(slotList, k);
+                    if (slotTag == null) continue;
                     int slotIdx = slotTag.getByte("Slot");
                     if (slotIdx >= 0 && slotIdx < tab.slots.size()) {
                         tab.slots.set(slotIdx, ItemStack.loadItemStackFromNBT(slotTag));
@@ -217,7 +309,7 @@ public class ComputerBlockEntity extends TileEntity {
                 if (tab.icon != null) {
                     NBTTagCompound iconTag = new NBTTagCompound();
                     tab.icon.writeToNBT(iconTag);
-                    tabTag.setTag("Icon", iconTag);
+                    nbtSetTag(tabTag, "Icon", iconTag);
                 }
 
                 // 🌟 重要：45個のスロットを保存
@@ -228,16 +320,16 @@ public class ComputerBlockEntity extends TileEntity {
                         NBTTagCompound slotTag = new NBTTagCompound();
                         slotTag.setByte("Slot", (byte) i);
                         stack.writeToNBT(slotTag);
-                        slotList.appendTag(slotTag);
+                        nbtAppendTag(slotList, slotTag);
                     }
                 }
-                tabTag.setTag("Slots", slotList);
-                tabList.appendTag(tabTag);
+                nbtSetTag(tabTag, "Slots", slotList);
+                nbtAppendTag(tabList, tabTag);
             }
-            playerTag.setTag("Tabs", tabList);
-            playersList.appendTag(playerTag);
+            nbtSetTag(playerTag, "Tabs", tabList);
+            nbtAppendTag(playersList, playerTag);
         }
-        nbt.setTag("PlayerTabData", playersList);
+        nbtSetTag(nbt, "PlayerTabData", playersList);
     }
 
     // --- サーバーからクライアントへデータを送るためのパケット作成 ---
