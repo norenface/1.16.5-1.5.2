@@ -381,7 +381,7 @@ public class ComputerScreen extends GuiContainer {
                 if (this.mc.thePlayer.field_71071_by.getItemStack() == null && slot.func_75216_f()) {
                     if (button == 0) {
                         this.isDraggingItem = true;
-                        this.draggingStack = slot.func_75211_c().copy();
+                        this.draggingStack = MCHelper.itemCopy(slot.func_75211_c());
                         this.pressedSlotIndex = id;
 
                         boolean isShift = org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_LSHIFT) ||

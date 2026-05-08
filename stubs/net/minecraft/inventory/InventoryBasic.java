@@ -4,9 +4,8 @@ import net.minecraft.entity.player.EntityPlayer;
 public class InventoryBasic implements IInventory {
     private ItemStack[] contents;
     private String name;
-    private boolean customName;
-    public InventoryBasic(String name, boolean customName, int size) {
-        this.name = name; this.customName = customName; this.contents = new ItemStack[size];
+    public InventoryBasic(String name, int size) {
+        this.name = name; this.contents = new ItemStack[size];
     }
     @Override public int func_70302_a() { return contents.length; }
     @Override public ItemStack func_70301_a(int i) { return i >= 0 && i < contents.length ? contents[i] : null; }
@@ -14,7 +13,7 @@ public class InventoryBasic implements IInventory {
     @Override public ItemStack func_70304_a(int i) { return null; }
     @Override public void func_70299_a(int i, ItemStack s) { if (i >= 0 && i < contents.length) contents[i] = s; }
     @Override public String func_70303_a() { return name; }
-    @Override public boolean func_71125_a() { return customName; }
+    @Override public boolean func_71125_a() { return false; }
     @Override public int func_70297_a() { return 64; }
     @Override public void func_70296_a() {}
     @Override public boolean func_70300_a(EntityPlayer p) { return true; }
