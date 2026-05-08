@@ -60,15 +60,25 @@ public class ComputerBlock extends net.minecraft.block.BlockContainer {
     }
 
     private boolean openComputerGui(World world, int x, int y, int z, EntityPlayer player) {
+        // チャットメッセージは latest.log に依存せず必ず画面に表示される診断
+        try { player.func_70092_c("[PC] side=" + (world.field_72995_K ? "CLIENT" : "SERVER")); } catch (Exception e) {}
+
         if (world.field_72995_K) {
             return true;
         }
-        System.out.println("=== [DEBUG] Opening GUI on Server ===");
+
+        // instance が null なら GuiHandler を手動で取得して openGui
+        if (TSSPCMod.instance == null) {
+            try { player.func_70092_c("[PC] ERROR: instance is null!"); } catch (Exception e) {}
+            return true;
+        }
+
+        try { player.func_70092_c("[PC] calling openGui..."); } catch (Exception e) {}
         try {
             player.openGui(TSSPCMod.instance, TSSPCMod.GUI_ID, world, x, y, z);
+            try { player.func_70092_c("[PC] openGui OK"); } catch (Exception e2) {}
         } catch (Exception e) {
-            System.out.println("=== [DEBUG] openGui ERROR: " + e);
-            e.printStackTrace();
+            try { player.func_70092_c("[PC] openGui ERR: " + e); } catch (Exception e2) {}
         }
         return true;
     }
