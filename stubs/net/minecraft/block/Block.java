@@ -27,7 +27,8 @@ public class Block {
     public boolean func_71880_b(int metadata) { return false; }      // hasTileEntity
     public TileEntity func_71916_a(World world) { return null; }     // createNewTileEntity (vanilla SRG)
     public TileEntity createTileEntity(World world, int metadata) { return null; } // Forge-added
-    public boolean func_71930_a(World world, int x, int y, int z, EntityPlayer player, int side, float hitX, float hitY, float hitZ) { return false; } // onBlockActivated
+    public boolean func_71930_a(World world, int x, int y, int z, EntityPlayer player, int side, float hitX, float hitY, float hitZ) { return false; } // onBlockActivated (SRG)
+    public boolean onBlockActivated(World world, int x, int y, int z, EntityPlayer player, int side, float hitX, float hitY, float hitZ) { return false; } // onBlockActivated (MCP)
     public boolean func_71917_g(World world, int x, int y, int z) { return true; } // canPlaceBlockAt
     public Icon func_71874_a(int side, int metadata) { return blockIcon; }  // getIcon
     public void func_94341_s(IconRegister iconRegister) {}           // registerIcons

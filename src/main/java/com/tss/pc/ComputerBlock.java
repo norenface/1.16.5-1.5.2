@@ -47,15 +47,29 @@ public class ComputerBlock extends net.minecraft.block.BlockContainer {
         return super.func_71917_g(world, x, y, z);
     }
     // --- 1.5.2 の右クリック処理 ---
-    // 1.5.2ではスニーク中はバニラがonBlockActivatedをスキップするため、
-    // 通常の右クリックでGUIを開く（チェストや炉と同じ挙動）
+    // func_71930_a (SRG名) と onBlockActivated (MCP名) の両方をオーバーライドして
+    // 実行時にどちらの名前が使われていても確実に呼ばれるようにする
     @Override
     public boolean func_71930_a(World world, int x, int y, int z, EntityPlayer player, int side, float hitX, float hitY, float hitZ) {
+        return openComputerGui(world, x, y, z, player);
+    }
+
+    // MCP名でも同じ処理を提供する（Forge 1.5.2 では MCP名が使われる場合がある）
+    public boolean onBlockActivated(World world, int x, int y, int z, EntityPlayer player, int side, float hitX, float hitY, float hitZ) {
+        return openComputerGui(world, x, y, z, player);
+    }
+
+    private boolean openComputerGui(World world, int x, int y, int z, EntityPlayer player) {
         if (world.field_72995_K) {
             return true;
         }
         System.out.println("=== [DEBUG] Opening GUI on Server ===");
-        player.openGui(TSSPCMod.instance, TSSPCMod.GUI_ID, world, x, y, z);
+        try {
+            player.openGui(TSSPCMod.instance, TSSPCMod.GUI_ID, world, x, y, z);
+        } catch (Exception e) {
+            System.out.println("=== [DEBUG] openGui ERROR: " + e);
+            e.printStackTrace();
+        }
         return true;
     }
 
