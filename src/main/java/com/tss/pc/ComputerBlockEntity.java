@@ -201,9 +201,6 @@ public class ComputerBlockEntity extends TileEntity {
     @Override
     public void func_70310_b(net.minecraft.nbt.NBTTagCompound nbt) {
         super.func_70310_b(nbt);
-        if (this.getWorldObj() != null && !this.getWorldObj().field_72995_K) {
-            GlobalItemStorageData.get(this.getWorldObj()).markDirty();
-        }
 
         // 🌟 プレイヤーごとのタブデータを保存
         NBTTagList playersList = new NBTTagList();

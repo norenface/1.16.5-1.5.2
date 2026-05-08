@@ -5,6 +5,7 @@ import net.minecraft.world.World;
 import net.minecraft.world.WorldSavedData;
 import net.minecraft.world.storage.MapStorage;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 public class GlobalItemStorageData extends WorldSavedData {
@@ -15,7 +16,43 @@ public class GlobalItemStorageData extends WorldSavedData {
     private static Method mapStorageLoadMethod;
     private static Method mapStorageSetMethod;
 
+    // WorldSavedDataのmarkDirty相当メソッド（SRG名）をリフレクションで検索する
+    private static Method worldSavedDataMarkDirtyMethod;
+    // フォールバック: dirty フィールドを直接操作する
+    private static Field worldSavedDataDirtyField;
+
     static {
+        // WorldSavedData の no-arg void メソッド = markDirty相当を探す
+        try {
+            for (Method m : WorldSavedData.class.getDeclaredMethods()) {
+                if (m.getParameterTypes().length == 0 && m.getReturnType() == void.class) {
+                    m.setAccessible(true);
+                    worldSavedDataMarkDirtyMethod = m;
+                    System.out.println("DEBUG: [TSSPC] WorldSavedData.markDirty = " + m.getName());
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("DEBUG: [TSSPC] WorldSavedData.markDirty search error: " + e);
+        }
+
+        // フォールバック: boolean 型フィールド (dirty) を直接探す
+        if (worldSavedDataMarkDirtyMethod == null) {
+            try {
+                for (Field f : WorldSavedData.class.getDeclaredFields()) {
+                    if (f.getType() == boolean.class) {
+                        f.setAccessible(true);
+                        worldSavedDataDirtyField = f;
+                        System.out.println("DEBUG: [TSSPC] WorldSavedData.dirty field = " + f.getName());
+                        break;
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println("DEBUG: [TSSPC] WorldSavedData.dirty field search error: " + e);
+            }
+        }
+
+        // MapStorage.loadData を探す: (Class, String) -> WorldSavedData
         try {
             for (Method m : MapStorage.class.getMethods()) {
                 Class<?>[] p = m.getParameterTypes();
@@ -28,6 +65,8 @@ public class GlobalItemStorageData extends WorldSavedData {
         } catch (Exception e) {
             System.out.println("DEBUG: [TSSPC] MapStorage.loadData search error: " + e);
         }
+
+        // MapStorage.setData を探す: (String, WorldSavedData) -> void
         try {
             for (Method m : MapStorage.class.getMethods()) {
                 Class<?>[] p = m.getParameterTypes();
@@ -52,6 +91,27 @@ public class GlobalItemStorageData extends WorldSavedData {
                 parent.markDirty();
             }
         });
+    }
+
+    // WorldSavedData の markDirty() は実行時 SRG 名のため明示オーバーライドでリフレクション経由で呼ぶ
+    @Override
+    public void markDirty() {
+        if (worldSavedDataMarkDirtyMethod != null) {
+            try {
+                worldSavedDataMarkDirtyMethod.invoke(this);
+                return;
+            } catch (Exception e) {
+                System.out.println("DEBUG: [TSSPC] markDirty invoke error: " + e);
+            }
+        }
+        // フォールバック: dirty フィールドを直接 true にセット
+        if (worldSavedDataDirtyField != null) {
+            try {
+                worldSavedDataDirtyField.set(this, true);
+            } catch (Exception e) {
+                System.out.println("DEBUG: [TSSPC] dirty field set error: " + e);
+            }
+        }
     }
 
     public BulkItemStorage getStorage() {
