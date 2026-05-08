@@ -111,7 +111,7 @@ public class ComputerContainer extends Container {
         for (int i = 0; i < 45; i++) {
             int index = (startRow * 9) + i;
             if (index >= 0 && index < filtered.size()) {
-                ItemStack s = filtered.get(index).copy();
+                ItemStack s = MCHelper.itemCopy(filtered.get(index));
                 int realCount = storage.getItemCount(s);
                 if (s.stackTagCompound == null) s.stackTagCompound = new NBTTagCompound();
                 s.stackTagCompound.setInteger("RealCount", realCount);
@@ -141,7 +141,7 @@ public class ComputerContainer extends Container {
                     ItemStack favItem = currentTab.slots.get(dataIndex);
 
                     if (favItem != null) {
-                        ItemStack displayStack = favItem.copy();
+                        ItemStack displayStack = MCHelper.itemCopy(favItem);
                         int realCount = storage.getItemCount(displayStack);
 
                         if (displayStack.stackTagCompound == null) {
@@ -179,7 +179,7 @@ public class ComputerContainer extends Container {
                 // サーバー側
                 Slot slot = (Slot) this.field_75151_b.get(slotId);
                 if (slot != null && slot.func_75216_f()) {
-                    System.out.println(side + " Processing Withdraw for: " + slot.func_75211_c().getDisplayName());
+                    System.out.println(side + " Processing Withdraw for: " + MCHelper.itemGetDisplayName(slot.func_75211_c()));
                     System.out.println(side + " Attempting Withdraw: Slot " + slotId);
 
                     // 右クリックなら1個、それ以外なら最大スタック数
@@ -217,7 +217,7 @@ public class ComputerContainer extends Container {
 
                     if (mouseStack != null) {
                         // --- 登録処理 ---
-                        ItemStack favStack = mouseStack.copy();
+                        ItemStack favStack = MCHelper.itemCopy(mouseStack);
                         favStack.stackSize = 1;
 
                         // リストのサイズ調整（actualFavIndexを使う）

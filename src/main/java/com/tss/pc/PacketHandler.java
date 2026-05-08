@@ -144,7 +144,7 @@ public class PacketHandler implements IPacketHandler {
                 if (index >= 0 && index < tabs.size()) {
                     // 🌟 修正：iconがnull（解除）ならそのままnullをセット、あればコピー
                     if (icon != null) {
-                        ItemStack iconStack = icon.copy();
+                        ItemStack iconStack = MCHelper.itemCopy(icon);
                         iconStack.stackSize = 1;
                         tabs.get(index).icon = iconStack;
                         System.out.println("SERVER: Tab Icon updated for index " + index);
@@ -153,9 +153,9 @@ public class PacketHandler implements IPacketHandler {
                         System.out.println("SERVER: Tab Icon CLEARED for index " + index);
                     }
 
-                    if (te.worldObj != null) {
+                    if (te.getWorldObj() != null) {
                         te.func_70296_a();
-                        te.worldObj.func_72698_d(te.field_70329_l, te.field_70330_k, te.field_70328_m);
+                        te.getWorldObj().func_72698_d(te.field_70329_l, te.field_70330_k, te.field_70328_m);
                     }
                 }
                 break;
@@ -169,7 +169,7 @@ public class PacketHandler implements IPacketHandler {
                             tab.slots.add(null);
                         }
 
-                        tab.slots.set(index, icon != null ? icon.copy() : null);
+                        tab.slots.set(index, icon != null ? MCHelper.itemCopy(icon) : null);
 
                         // 保存と同期
                         te.func_70296_a();
@@ -197,9 +197,9 @@ public class PacketHandler implements IPacketHandler {
 
                     // 🌟 2. TileEntity の変更を通知（これがないとクライアントにパケットが飛ばない）
                     te.func_70296_a();
-                    if (te.worldObj != null) {
+                    if (te.getWorldObj() != null) {
                         // クライアントへ TileEntity の NBT データを再送させる
-                        te.worldObj.func_72698_d(te.field_70329_l, te.field_70330_k, te.field_70328_m);
+                        te.getWorldObj().func_72698_d(te.field_70329_l, te.field_70330_k, te.field_70328_m);
                     }
 
                     System.out.println("SERVER: Added Row. Current Total Slots: " + tab.slots.size());
@@ -238,9 +238,9 @@ public class PacketHandler implements IPacketHandler {
         // 🌟 1.5.2での同期 (te. 経由で呼ぶことで worldObj エラーを回避)
         te.func_70296_a();
 
-        if (te.worldObj != null) {
+        if (te.getWorldObj() != null) {
             // サーバーからクライアントへ「データ送って！」と通知する命令
-            te.worldObj.func_72698_d(te.field_70329_l, te.field_70330_k, te.field_70328_m);
+            te.getWorldObj().func_72698_d(te.field_70329_l, te.field_70330_k, te.field_70328_m);
         }
 
         // UIの表示更新
@@ -318,8 +318,8 @@ public class PacketHandler implements IPacketHandler {
                         int totalInStorage = te.getBulkStorage().getCountOf(favStack);
                         favStack.stackSize = (totalInStorage > 0) ? totalInStorage : 1; // 0個でもアイコンは消さない
 
-                        if (favStack.hasTagCompound()) {
-                            favStack.getTagCompound().setInteger("RealCount", totalInStorage);
+                        if (favStack.stackTagCompound != null) {
+                            favStack.stackTagCompound.setInteger("RealCount", totalInStorage);
                         }
                     }
                 }

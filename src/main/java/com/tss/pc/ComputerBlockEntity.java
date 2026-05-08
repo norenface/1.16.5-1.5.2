@@ -171,7 +171,7 @@ public class ComputerBlockEntity extends TileEntity {
     public void setLastClickTime(long time) { this.lastClickTime = time; }
     public int getLastClickedSlotIndex() { return lastClickedSlotIndex; }
     public void setLastClickedSlotIndex(int index) { this.lastClickedSlotIndex = index; }
-    public void setLastTransferStack(ItemStack stack) { this.lastTransferStack = (stack == null) ? null : stack.copy(); }
+    public void setLastTransferStack(ItemStack stack) { this.lastTransferStack = (stack == null) ? null : MCHelper.itemCopy(stack); }
     public ItemStack getLastTransferStack() { return lastTransferStack; }
     public void setLastTransferCount(int count) { this.lastTransferCount = count; }
     public int getLastTransferCount() { return lastTransferCount; }
@@ -272,7 +272,7 @@ public class ComputerBlockEntity extends TileEntity {
                 FavoriteTab tab = new FavoriteTab(tabTag.getString("TabName"));
 
                 if (tabTag.hasKey("Icon")) {
-                    tab.icon = ItemStack.loadItemStackFromNBT(nbtGetCompoundTag(tabTag, "Icon"));
+                    tab.icon = MCHelper.itemLoadFromNBT(nbtGetCompoundTag(tabTag, "Icon"));
                 }
 
                 // 🌟 スロットの復元
@@ -282,7 +282,7 @@ public class ComputerBlockEntity extends TileEntity {
                     if (slotTag == null) continue;
                     int slotIdx = slotTag.getByte("Slot");
                     if (slotIdx >= 0 && slotIdx < tab.slots.size()) {
-                        tab.slots.set(slotIdx, ItemStack.loadItemStackFromNBT(slotTag));
+                        tab.slots.set(slotIdx, MCHelper.itemLoadFromNBT(slotTag));
                     }
                 }
                 tabs.add(tab);
@@ -308,7 +308,7 @@ public class ComputerBlockEntity extends TileEntity {
                 // アイコンの保存
                 if (tab.icon != null) {
                     NBTTagCompound iconTag = new NBTTagCompound();
-                    tab.icon.writeToNBT(iconTag);
+                    MCHelper.itemWriteToNBT(tab.icon, iconTag);
                     nbtSetTag(tabTag, "Icon", iconTag);
                 }
 
@@ -319,7 +319,7 @@ public class ComputerBlockEntity extends TileEntity {
                     if (stack != null) {
                         NBTTagCompound slotTag = new NBTTagCompound();
                         slotTag.setByte("Slot", (byte) i);
-                        stack.writeToNBT(slotTag);
+                        MCHelper.itemWriteToNBT(stack, slotTag);
                         nbtAppendTag(slotList, slotTag);
                     }
                 }
@@ -376,7 +376,7 @@ public class ComputerBlockEntity extends TileEntity {
             FavoriteTab tab = tabList.get(tabIndex);
             if (slotIndex >= 0 && slotIndex < 45) {
                 // アイテムを1個だけコピーして登録（1.16.5の仕様）
-                ItemStack copy = (stack == null) ? null : stack.copy();
+                ItemStack copy = (stack == null) ? null : MCHelper.itemCopy(stack);
                 if (copy != null) copy.stackSize = 1;
 
                 tab.slots.set(slotIndex, copy);
