@@ -165,7 +165,8 @@ public class ComputerScreen extends GuiContainer {
 
     // 1.5.2用のテクスチャ指定
     private static final String texturePath = "/mods/tss_pc/textures/gui/computer.png";
-    private EntityPlayer thePlayer; // 🌟 プレイヤーを保持する変数
+    private EntityPlayer thePlayer;
+    private ComputerContainer container; // field_73875_a の SRG 名が違うため自クラスで保持
     private ComputerBlockEntity tileEntity;
     private GuiTextField searchBox;
     private GuiTextField tabNameField;
@@ -205,8 +206,13 @@ public class ComputerScreen extends GuiContainer {
         private static net.minecraft.client.renderer.entity.RenderItem itemRenderer = new net.minecraft.client.renderer.entity.RenderItem();
 
 
+    // GuiContainer.inventorySlots の SRG 名が違うため、コンテナを super に渡す前に変数に保存する
     public ComputerScreen(InventoryPlayer inventory, EntityPlayer playerObj, ComputerBlockEntity te) {
-        super(new ComputerContainer(inventory, playerObj, te));
+        this(new ComputerContainer(inventory, playerObj, te), playerObj, te);
+    }
+    private ComputerScreen(ComputerContainer cont, EntityPlayer playerObj, ComputerBlockEntity te) {
+        super(cont);
+        this.container = cont;
         this.thePlayer = playerObj;
         this.tileEntity = te;
         this.xSize = 300;
@@ -242,7 +248,7 @@ public class ComputerScreen extends GuiContainer {
         int left = (this.width - this.xSize) / 2;
         int top = (this.height - this.ySize) / 2;
         this.tabX = left + this.xSize; // タブは画面の右端から始まる
-        ComputerContainer container = (ComputerContainer) this.field_73875_a;
+        ComputerContainer container = this.container;
 
 
         GL11.glDisable(GL11.GL_TEXTURE_2D);
@@ -259,8 +265,8 @@ public class ComputerScreen extends GuiContainer {
 
         // 3. スロットに「枠線」をつけるループ
         // 1.16.5のように、背景(0xFF252526)の上に少し小さい四角を描くことで枠線を表現します
-        for (int s = 0; s < this.field_73875_a.field_75151_b.size(); s++) {
-            net.minecraft.inventory.Slot slot = (net.minecraft.inventory.Slot) this.field_73875_a.field_75151_b.get(s);
+        for (int s = 0; s < this.container.getSlots().size(); s++) {
+            net.minecraft.inventory.Slot slot = (net.minecraft.inventory.Slot) this.container.getSlots().get(s);
             int slotX = left + slotX(slot) - 1;
             int slotY = top + slotY(slot) - 1;
 
@@ -364,7 +370,7 @@ public class ComputerScreen extends GuiContainer {
             ComputerBlockEntity.FavoriteTab currentTab = tabs.get(actualIndex);
 
             // 🌟 選択中のタブのハイライト判定 (actualIndexを使用)
-            if (actualIndex == ((ComputerContainer)this.field_73875_a).selectedTabIndex) {
+            if (actualIndex == this.container.selectedTabIndex) {
                 GL11.glDisable(GL11.GL_TEXTURE_2D);
                 drawRect(left + this.xSize, iconY - 2, left + this.xSize + 22, iconY + 18, 0xFF007ACC);
                 GL11.glEnable(GL11.GL_TEXTURE_2D);
@@ -391,7 +397,7 @@ public class ComputerScreen extends GuiContainer {
         boolean isMouseDown = org.lwjgl.input.Mouse.isButtonDown(0);
         int left = (this.width - this.xSize) / 2;
         int top = (this.height - this.ySize) / 2;
-        ComputerContainer container = (ComputerContainer) this.field_73875_a;
+        ComputerContainer container = this.container;
 
         // --- スクロールドラッグ処理 ---
         if (isMouseDown) {
@@ -456,7 +462,7 @@ public class ComputerScreen extends GuiContainer {
 
         // 🌟 全スロット（ストレージ0-44 + お気に入り45-89）を対象にするならループを90まで
         for (int i = 0; i < 90; i++) {
-            Slot slot = (Slot) this.field_73875_a.field_75151_b.get(i);
+            Slot slot = (Slot) this.container.getSlots().get(i);
             if (slot != null && slot.func_75216_f()) {
                 ItemStack stackInSlot = slot.func_75211_c();
 
@@ -613,7 +619,7 @@ public class ComputerScreen extends GuiContainer {
                         }
 
                         // コンテナに最新の状態を反映
-                        ComputerContainer container = (ComputerContainer) this.field_73875_a;
+                        ComputerContainer container = this.container;
                         container.favScrollPos = this.favoriteScrollOffs;
                         container.updateVisibleSlots();
                     }
@@ -640,7 +646,7 @@ public class ComputerScreen extends GuiContainer {
                     sendTabAction(4, actualIndex, "", heldItem);
                 } else { // タブ切り替え
                     this.selectedTabIndex = actualIndex;
-                    ((ComputerContainer)this.field_73875_a).selectedTabIndex = actualIndex;
+                    this.container.selectedTabIndex = actualIndex;
 
                     // 🌟 これを追加！
                     this.tabNameField.setText(tabsForClick.get(actualIndex).name);
@@ -695,14 +701,14 @@ public class ComputerScreen extends GuiContainer {
                 }
 
                 // 5. サーバーへ「今これを選んでいるよ」と念押し（同期）
-                ((ComputerContainer)this.field_73875_a).selectedTabIndex = this.selectedTabIndex;
+                this.container.selectedTabIndex = this.selectedTabIndex;
                 sendTabAction(2, this.selectedTabIndex, "", null);
 
                 // 6. 🌟 切り替わった先のタブ名称にテキストボックスを更新
                 this.tabNameField.setText(tabs.get(this.selectedTabIndex).name);
 
                 // 7. 表示スロットの更新
-                ((ComputerContainer)this.field_73875_a).updateVisibleSlots();
+                this.container.updateVisibleSlots();
                 return;
             }
         }
@@ -750,7 +756,7 @@ public class ComputerScreen extends GuiContainer {
                 }
             }
 
-            ComputerContainer container = (ComputerContainer)this.field_73875_a;
+            ComputerContainer container = this.container;
             dos.writeFloat(container.scrollPos);
             dos.writeFloat(this.favoriteScrollOffs);
 
@@ -844,7 +850,7 @@ public class ComputerScreen extends GuiContainer {
         int mouseY = this.height - org.lwjgl.input.Mouse.getEventY() * this.height / org.lwjgl.opengl.Display.getHeight() - 1;
         int left = (this.width - this.xSize) / 2;
 
-        ComputerContainer container = (ComputerContainer) this.field_73875_a;
+        ComputerContainer container = this.container;
 
         if (mouseX < left + 185) { // メインエリア
             float step = 1.0F / Math.max(1, container.getMaxMainRows() - 5);
@@ -993,7 +999,7 @@ public class ComputerScreen extends GuiContainer {
                     dos.writeShort((short)-1);
                 }
                 dos.writeInt(amount);
-                ComputerContainer container = (ComputerContainer)this.field_73875_a;
+                ComputerContainer container = this.container;
                 dos.writeFloat(container.scrollPos);
                 dos.writeFloat(this.favoriteScrollOffs);
 
@@ -1016,7 +1022,7 @@ public class ComputerScreen extends GuiContainer {
                 } else {
                     dos.writeShort((short)-1);
                 }
-                ComputerContainer container = (ComputerContainer)this.field_73875_a;
+                ComputerContainer container = this.container;
                 dos.writeFloat(container.scrollPos);
                 dos.writeFloat(this.favoriteScrollOffs);
 
@@ -1031,8 +1037,8 @@ public class ComputerScreen extends GuiContainer {
     }
 
     private void updateSearch() {
-        ((ComputerContainer) this.field_73875_a).searchText = this.searchBox.getText();
-        ((ComputerContainer) this.field_73875_a).updateVisibleSlots();
+        (this.container).searchText = this.searchBox.getText();
+        (this.container).updateVisibleSlots();
         // サーバーに検索ワードを伝えるパケット送信処理をここに追加
     }
     // Minecraft シングルトンをリフレクションで取得 (getMinecraft() は SRG 名のため直接呼び出せない)
@@ -1126,8 +1132,8 @@ public class ComputerScreen extends GuiContainer {
     }
 
     private net.minecraft.inventory.Slot getSlotAtPositionEx(int mouseX, int mouseY) {
-        for (int i = 0; i < this.field_73875_a.field_75151_b.size(); ++i) {
-            net.minecraft.inventory.Slot slot = (net.minecraft.inventory.Slot)this.field_73875_a.field_75151_b.get(i);
+        for (int i = 0; i < this.container.getSlots().size(); ++i) {
+            net.minecraft.inventory.Slot slot = (net.minecraft.inventory.Slot)this.container.getSlots().get(i);
             // 自作した判定メソッドを呼ぶ
             if (this.isMouseOverSlotEx(slot, mouseX, mouseY)) {
                 return slot;

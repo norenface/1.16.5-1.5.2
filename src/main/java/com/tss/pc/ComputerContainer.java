@@ -18,19 +18,34 @@ public class ComputerContainer extends Container {
 
     // ランタイムでのaddSlotToContainerメソッドを動的に検索する
     private static java.lang.reflect.Method containerAddSlot;
+    // Container.inventoryItemStacks (List<Slot>) のSRGフィールドをリフレクションで取得
+    private static java.lang.reflect.Field _containerSlotList;
     static {
         for (java.lang.reflect.Method m : net.minecraft.inventory.Container.class.getDeclaredMethods()) {
             Class<?>[] p = m.getParameterTypes();
             if (p.length == 1 && net.minecraft.inventory.Slot.class.isAssignableFrom(p[0])) {
                 try { m.setAccessible(true); } catch (Exception e) {}
                 containerAddSlot = m;
-                System.out.println("DEBUG: Found addSlotToContainer method: " + m.getName() + " -> " + m.getReturnType().getSimpleName());
+                System.out.println("DEBUG: Found addSlotToContainer: " + m.getName());
                 break;
             }
         }
-        if (containerAddSlot == null) {
-            System.out.println("DEBUG: addSlotToContainer not found via reflection, will use direct list manipulation");
+        for (java.lang.reflect.Field f : net.minecraft.inventory.Container.class.getDeclaredFields()) {
+            try {
+                f.setAccessible(true);
+                if (java.util.List.class.isAssignableFrom(f.getType())) {
+                    _containerSlotList = f;
+                    System.out.println("DEBUG: Found Container slot list: " + f.getName());
+                    break;
+                }
+            } catch (Exception ignored) {}
         }
+    }
+
+    /** Container のスロットリストをリフレクション経由で取得 (field_75151_b の SRG 名が違う場合の代替) */
+    public java.util.List getSlots() {
+        if (_containerSlotList != null) try { return (java.util.List) _containerSlotList.get(this); } catch (Exception ignored) {}
+        return this.field_75151_b;
     }
 
     private void addSlot(Slot slot) {
@@ -42,9 +57,9 @@ public class ComputerContainer extends Container {
                 System.err.println("DEBUG: addSlot reflection failed: " + e.getMessage());
             }
         }
-        // フォールバック：フィールドを直接操作
-        slot.slotNumber = this.field_75151_b.size();
-        this.field_75151_b.add(slot);
+        // フォールバック：スロットリストに直接追加
+        java.util.List slots = getSlots();
+        if (slots != null) { slot.slotNumber = slots.size(); slots.add(slot); }
     }
 
     // スクロール・フィルタ状態 (Screenから更新される)
