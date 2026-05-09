@@ -24,6 +24,37 @@ public class ComputerScreen extends GuiContainer {
     protected int xSize = 300;
     protected int ySize = 222;
 
+    // Slot フィールド (xDisplayPosition/yDisplayPosition/slotNumber) のSRG名が不明なためリフレクションで取得
+    private static java.lang.reflect.Field _slotNumber;
+    private static java.lang.reflect.Field _slotX;
+    private static java.lang.reflect.Field _slotY;
+    static {
+        java.util.List<java.lang.reflect.Field> intFields = new java.util.ArrayList<>();
+        for (java.lang.reflect.Field f : net.minecraft.inventory.Slot.class.getDeclaredFields()) {
+            if (f.getType() == int.class) {
+                f.setAccessible(true);
+                intFields.add(f);
+                System.out.println("DEBUG: Slot int field #" + (intFields.size()-1) + " = " + f.getName());
+            }
+        }
+        // MCP 7.51での宣言順: slotNumber(0), xDisplayPosition(1), yDisplayPosition(2)
+        if (intFields.size() >= 1) _slotNumber = intFields.get(0);
+        if (intFields.size() >= 2) _slotX      = intFields.get(1);
+        if (intFields.size() >= 3) _slotY      = intFields.get(2);
+    }
+    private static int slotNum(net.minecraft.inventory.Slot s) {
+        try { if (_slotNumber != null) return _slotNumber.getInt(s); } catch (Exception e) {}
+        return s.slotNumber; // フォールバック（SRG名が正しければ動く）
+    }
+    private static int slotX(net.minecraft.inventory.Slot s) {
+        try { if (_slotX != null) return _slotX.getInt(s); } catch (Exception e) {}
+        return s.xDisplayPosition;
+    }
+    private static int slotY(net.minecraft.inventory.Slot s) {
+        try { if (_slotY != null) return _slotY.getInt(s); } catch (Exception e) {}
+        return s.yDisplayPosition;
+    }
+
     // 1.5.2用のテクスチャ指定
     private static final String texturePath = "/mods/tss_pc/textures/gui/computer.png";
     private EntityPlayer thePlayer; // 🌟 プレイヤーを保持する変数
@@ -121,8 +152,8 @@ public class ComputerScreen extends GuiContainer {
         // 1.16.5のように、背景(0xFF252526)の上に少し小さい四角を描くことで枠線を表現します
         for (int s = 0; s < this.field_73875_a.field_75151_b.size(); s++) {
             net.minecraft.inventory.Slot slot = (net.minecraft.inventory.Slot) this.field_73875_a.field_75151_b.get(s);
-            int slotX = left + slot.xDisplayPosition - 1;
-            int slotY = top + slot.yDisplayPosition - 1;
+            int slotX = left + slotX(slot) - 1;
+            int slotY = top + slotY(slot) - 1;
 
             // スロットの枠線 (0xFF3E3E42)
             drawRect(slotX, slotY, slotX + 18, slotY + 18, 0xFF3E3E42);
@@ -346,8 +377,8 @@ public class ComputerScreen extends GuiContainer {
                     org.lwjgl.opengl.GL11.glScalef(scale, scale, scale);
 
                     int textWidth = this.fontRenderer.getStringWidth(displayStr);
-                    float x = (slot.xDisplayPosition + 16 - 1) / scale - textWidth;
-                    float y = (slot.yDisplayPosition + 16 - (7 * scale)) / scale;
+                    float x = (slotX(slot) + 16 - 1) / scale - textWidth;
+                    float y = (slotY(slot) + 16 - (7 * scale)) / scale;
 
                     this.fontRenderer.drawStringWithShadow(displayStr, (int)x, (int)y, color);
 
@@ -379,7 +410,7 @@ public class ComputerScreen extends GuiContainer {
         Slot slot = this.getSlotAtPositionEx(mouseX, mouseY);
 
         if (slot != null) {
-            int id = slot.slotNumber;
+            int id = slotNum(slot);
 
             // --- 2. ストレージスロット (0-44) ---
             if (id >= 0 && id < 45) {
@@ -816,8 +847,8 @@ public class ComputerScreen extends GuiContainer {
             int relY = mouseY - top;
 
             // --- A. お気に入りスロット(45-89)へドロップ ---
-            if (targetSlot != null && targetSlot.slotNumber >= 45 && targetSlot.slotNumber < 90) {
-                int favIdx = targetSlot.slotNumber - 45;
+            if (targetSlot != null && slotNum(targetSlot) >= 45 && slotNum(targetSlot) < 90) {
+                int favIdx = slotNum(targetSlot) - 45;
                 // 🌟 サーバーの handleTabAction(5, ...) を呼び出すためのパケット送信
                 this.sendTabAction(5, favIdx, "", this.draggingStack);
                 this.mc.sndManager.playSoundFX("random.pop", 0.2F, 1.2F);
@@ -957,8 +988,8 @@ public class ComputerScreen extends GuiContainer {
         int left = (this.width - this.xSize) / 2;
         int top = (this.height - this.ySize) / 2;
         // スロットの座標は GUI の左端・上端からの相対座標なので、それを考慮して判定
-        return mouseX >= left + slot.xDisplayPosition - 1 && mouseX <= left + slot.xDisplayPosition + 16 &&
-                mouseY >= top + slot.yDisplayPosition - 1 && mouseY <= top + slot.yDisplayPosition + 16;
+        return mouseX >= left + slotX(slot) - 1 && mouseX <= left + slotX(slot) + 16 &&
+                mouseY >= top + slotY(slot) - 1 && mouseY <= top + slotY(slot) + 16;
     }
     private int getActualFavoriteIndex(int slotIndex) {
         // スロット 54 がお気に入りスロットの 0 番目と仮定
