@@ -20,9 +20,13 @@ import net.minecraft.inventory.IInventory;
 
 
 public class ComputerScreen extends GuiContainer {
-    // GuiContainerのxSize/ySizeはランタイムでSRG名のためアクセス不可→自クラスでシャドウする
+    // GuiContainer/GuiScreen のSRG名フィールドをシャドウ (NoSuchFieldError防止)
     protected int xSize = 300;
     protected int ySize = 222;
+    protected int width;
+    protected int height;
+    protected net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+    protected net.minecraft.client.gui.FontRenderer fontRenderer;
 
     // Slot フィールド (xDisplayPosition/yDisplayPosition/slotNumber) のSRG名が不明なためリフレクションで取得
     private static java.lang.reflect.Field _slotNumber;
@@ -41,6 +45,29 @@ public class ComputerScreen extends GuiContainer {
         if (intFields.size() >= 1) _slotNumber = intFields.get(0);
         if (intFields.size() >= 2) _slotX      = intFields.get(1);
         if (intFields.size() >= 3) _slotY      = intFields.get(2);
+    }
+
+    // GuiScreen / Minecraft のSRG名フィールドをリフレクション取得
+    private static java.lang.reflect.Field _gsW, _gsH, _gsFR;
+    private static java.lang.reflect.Field _mcRE, _mcSnd;
+    static {
+        // GuiScreen: intフィールドの1番目=width, 2番目=height, FontRendererフィールド=fontRenderer
+        java.util.List<java.lang.reflect.Field> gsInts = new java.util.ArrayList<>();
+        for (java.lang.reflect.Field f : net.minecraft.client.gui.GuiScreen.class.getDeclaredFields()) {
+            try { f.setAccessible(true); } catch (Exception ignored) {}
+            Class<?> t = f.getType();
+            if (t == int.class) gsInts.add(f);
+            else if (t.getSimpleName().contains("FontRenderer")) { _gsFR = f; }
+        }
+        if (gsInts.size() >= 1) _gsW = gsInts.get(0);
+        if (gsInts.size() >= 2) _gsH = gsInts.get(1);
+        // Minecraft: RenderEngine と SoundManager
+        for (java.lang.reflect.Field f : net.minecraft.client.Minecraft.class.getDeclaredFields()) {
+            try { f.setAccessible(true); } catch (Exception ignored) {}
+            String sn = f.getType().getSimpleName();
+            if (sn.contains("RenderEngine")) _mcRE = f;
+            else if (sn.contains("SoundManager")) _mcSnd = f;
+        }
     }
     private static int slotNum(net.minecraft.inventory.Slot s) {
         try { if (_slotNumber != null) return _slotNumber.getInt(s); } catch (Exception e) {}
@@ -98,15 +125,17 @@ public class ComputerScreen extends GuiContainer {
 
 
     public ComputerScreen(InventoryPlayer inventory, EntityPlayer playerObj, ComputerBlockEntity te) {
-            super(new ComputerContainer(inventory, playerObj, te));
-            this.thePlayer = playerObj;
-            this.tileEntity = te;
-            this.xSize = 300; // 1.16.5のimageWidth
-        this.ySize = 222; // 1.16.5のimageHeight
+        super(new ComputerContainer(inventory, playerObj, te));
+        this.thePlayer = playerObj;
+        this.tileEntity = te;
+        this.xSize = 300;
+        this.ySize = 222;
+        this.mc = net.minecraft.client.Minecraft.getMinecraft();
     }
 
     @Override
     public void func_73866_w() {
+        syncGuiFields();
         super.func_73866_w();
         int left = (this.width - this.xSize) / 2;
         int top = (this.height - this.ySize) / 2;
@@ -129,7 +158,7 @@ public class ComputerScreen extends GuiContainer {
     @Override
     protected void func_74185_a(float partialTicks, int mouseX, int mouseY) {
         if (this.searchBox == null) return; // initGui未実行ガード
-        this.mc.renderEngine.bindTexture("/font/default.png");
+        getRenderEngine().bindTexture("/font/default.png");
         int left = (this.width - this.xSize) / 2;
         int top = (this.height - this.ySize) / 2;
         this.tabX = left + this.xSize; // タブは画面の右端から始まる
@@ -264,7 +293,7 @@ public class ComputerScreen extends GuiContainer {
             // アイコンまたは数字の描画
             if (currentTab.icon != null) {
                 net.minecraft.client.renderer.RenderHelper.enableGUIStandardItemLighting();
-                itemRenderer.renderItemAndEffectIntoGUI(this.fontRenderer, this.mc.renderEngine, currentTab.icon, iconX, iconY);
+                itemRenderer.renderItemAndEffectIntoGUI(this.fontRenderer, getRenderEngine(), currentTab.icon, iconX, iconY);
                 net.minecraft.client.renderer.RenderHelper.disableStandardItemLighting();
             } else {
                 String numStr = String.valueOf(actualIndex + 1);
@@ -277,6 +306,7 @@ public class ComputerScreen extends GuiContainer {
 
     @Override
     public void func_73863_a(int mouseX, int mouseY, float partialTicks) {
+        syncGuiFields();
         // 1. マウスの押し下げ状態を確認 (0: 左クリック)
         boolean isMouseDown = org.lwjgl.input.Mouse.isButtonDown(0);
         int left = (this.width - this.xSize) / 2;
@@ -326,7 +356,7 @@ public class ComputerScreen extends GuiContainer {
             GL11.glTranslatef(0, 0, 500);
             net.minecraft.client.renderer.RenderHelper.enableGUIStandardItemLighting();
             itemRenderer.zLevel = 200.0F;
-            itemRenderer.renderItemAndEffectIntoGUI(this.fontRenderer, this.mc.renderEngine, this.draggingStack, mouseX - 8, mouseY - 8);
+            itemRenderer.renderItemAndEffectIntoGUI(this.fontRenderer, getRenderEngine(), this.draggingStack, mouseX - 8, mouseY - 8);
             itemRenderer.zLevel = 0.0F;
             GL11.glPopMatrix();
         }
@@ -414,7 +444,7 @@ public class ComputerScreen extends GuiContainer {
 
             // --- 2. ストレージスロット (0-44) ---
             if (id >= 0 && id < 45) {
-                if (this.mc.thePlayer.field_71071_by.getItemStack() == null && slot.func_75216_f()) {
+                if (this.thePlayer.field_71071_by.getItemStack() == null && slot.func_75216_f()) {
                     if (button == 0) {
                         this.isDraggingItem = true;
                         this.draggingStack = MCHelper.itemCopy(slot.func_75211_c());
@@ -424,7 +454,7 @@ public class ComputerScreen extends GuiContainer {
                                 org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_RSHIFT);
                         int amount = isShift ? 64 : 1;
                         this.sendComputerPacket(2, 0, id, slot.func_75211_c(), amount);
-                        this.mc.sndManager.playSoundFX("random.click", 0.6F, 1.2F);
+                        getSndManager().playSoundFX("random.click", 0.6F, 1.2F);
                         return;
                     }
                 }
@@ -433,13 +463,13 @@ public class ComputerScreen extends GuiContainer {
             // --- 3. お気に入りスロット (45-89) ---
             else if (id >= 45 && id < 90) {
                 // 🌟 修正：どのような操作であっても、お気に入りスロットならここで処理を完結させる
-                if (this.mc.thePlayer.field_71071_by.getItemStack() == null && slot.func_75216_f()) {
+                if (this.thePlayer.field_71071_by.getItemStack() == null && slot.func_75216_f()) {
                     // 左(0)または右(1)クリックで引き出し
                     if (button == 0 || button == 1) {
                         boolean isShift = org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_LSHIFT);
                         int amount = isShift ? 64 : 1;
                         this.sendComputerPacket(2, 0, id, slot.func_75211_c(), amount);
-                        this.mc.sndManager.playSoundFX("random.click", 0.6F, 1.2F);
+                        getSndManager().playSoundFX("random.click", 0.6F, 1.2F);
                     }
                 }
 
@@ -453,7 +483,7 @@ public class ComputerScreen extends GuiContainer {
         }
         if (relY >= 190 && relY <= 200) {
             if (relX >= 233 && relX <= 258) { // [+Row] ボタン
-                this.mc.sndManager.playSoundFX("random.click", 1.0F, 1.2F);
+                getSndManager().playSoundFX("random.click", 1.0F, 1.2F);
 
                 // 🌟 サーバーへパケットを送るのをやめる（または通知のみにする）
                 // 🌟 代わりにクライアント側のリストを直接増やす
@@ -474,7 +504,7 @@ public class ComputerScreen extends GuiContainer {
 
             // B. [-Row] ボタンの範囲 (X: 260〜285付近)
             if (relX >= 260 && relX <= 285) {
-                this.mc.sndManager.playSoundFX("random.click", 1.0F, 0.8F);
+                getSndManager().playSoundFX("random.click", 1.0F, 0.8F);
 
                 // 🌟 Client主導: サーバーへパケットを送る必要はありません（または通知のみ）
                 // this.sendComputerPacket(1, 8, this.selectedTabIndex, null, 1); // 不要ならコメントアウト
@@ -512,7 +542,7 @@ public class ComputerScreen extends GuiContainer {
             }
         }
         // --- 3. タブのアイコン設定 / 切替 (mouseClicked内) ---
-        java.util.List<ComputerBlockEntity.FavoriteTab> tabsForClick = this.tileEntity.getTabsForPlayer(this.mc.thePlayer);
+        java.util.List<ComputerBlockEntity.FavoriteTab> tabsForClick = this.tileEntity.getTabsForPlayer(this.thePlayer);
 
         for (int i = 0; i < MAX_VISIBLE_TABS; i++) {
             // 🌟 見えている範囲のインデックス
@@ -522,7 +552,7 @@ public class ComputerScreen extends GuiContainer {
             int tabYStart = 10 + (i * 20);
             // マウスがその枠内にあるか判定
             if (relX >= this.xSize && relX <= this.xSize + 25 && relY >= tabYStart && relY <= tabYStart + 20) {
-                net.minecraft.item.ItemStack heldItem = this.mc.thePlayer.field_71071_by.getItemStack();
+                net.minecraft.item.ItemStack heldItem = this.thePlayer.field_71071_by.getItemStack();
 
                 if (button == 2) { // ホイールクリックで消去
                     sendTabAction(4, actualIndex, "", null);
@@ -536,7 +566,7 @@ public class ComputerScreen extends GuiContainer {
                     this.tabNameField.setText(tabsForClick.get(actualIndex).name);
 
                     sendTabAction(2, actualIndex, "", null);
-                    this.mc.sndManager.playSoundFX("random.click", 1.0F, 0.8F);
+                    getSndManager().playSoundFX("random.click", 1.0F, 0.8F);
                 }
                 return; // タブを処理したら終了
             }
@@ -546,7 +576,7 @@ public class ComputerScreen extends GuiContainer {
         if (relX >= this.xSize + 5 && relX <= this.xSize + 25) {
             // --- [+] 追加ボタン ---
             if (relY >= 190 && relY <= 200) {
-                this.mc.sndManager.playSoundFX("random.pop", 0.5F, 1.2F);
+                getSndManager().playSoundFX("random.pop", 0.5F, 1.2F);
 
                 java.util.List<ComputerBlockEntity.FavoriteTab> tabs = this.tileEntity.getTabsForPlayer(this.thePlayer);
 
@@ -570,7 +600,7 @@ public class ComputerScreen extends GuiContainer {
                 // 1. そもそもタブがない、または1個しかない場合は何もしない（ガード）
                 if (tabs.size() <= 1) return;
 
-                this.mc.sndManager.playSoundFX("random.click", 1.0F, 0.8F);
+                getSndManager().playSoundFX("random.click", 1.0F, 0.8F);
 
                 // 2. サーバーへ削除パケット送信
                 sendTabAction(1, this.selectedTabIndex, "", null);
@@ -711,7 +741,7 @@ public class ComputerScreen extends GuiContainer {
             } else {
                 // スロット外クリック（マウスでアイテムを掴んでいるかチェック）
                 // 🌟 mc.thePlayer を使うのが1.5.2のGUIでは一番安全です
-                if (this.mc.thePlayer.field_71071_by.getItemStack() != null) {
+                if (this.thePlayer.field_71071_by.getItemStack() != null) {
                     sendActionPacket(6, -999);
                 }
             }
@@ -725,7 +755,7 @@ public class ComputerScreen extends GuiContainer {
         // --- ストレージスロット (0-44) ---
         // --- ストレージスロット (0-44) ---
         if (slotId >= 0 && slotId < 45) {
-            net.minecraft.item.ItemStack heldStack = this.mc.thePlayer.field_71071_by.getItemStack();
+            net.minecraft.item.ItemStack heldStack = this.thePlayer.field_71071_by.getItemStack();
             if (heldStack != null) {
                 this.sendComputerPacket(6, 0, slotId, heldStack, 0); // 預け入れ
                 return; // 🌟 superを呼ばない
@@ -742,7 +772,7 @@ public class ComputerScreen extends GuiContainer {
         // --- お気に入りスロット (45-89) ---
         if (slotId >= 45 && slotId < 90) {
             // お気に入り登録 (PacketId: 1, ActionType: 5)
-            this.sendComputerPacket(1, 5, slotId - 45, this.mc.thePlayer.field_71071_by.getItemStack(), 0);
+            this.sendComputerPacket(1, 5, slotId - 45, this.thePlayer.field_71071_by.getItemStack(), 0);
             return;
         }
 
@@ -755,8 +785,8 @@ public class ComputerScreen extends GuiContainer {
         int wheel = org.lwjgl.input.Mouse.getEventDWheel();
         if (wheel == 0) return;
 
-        int mouseX = org.lwjgl.input.Mouse.getEventX() * this.width / this.mc.displayWidth;
-        int mouseY = this.height - org.lwjgl.input.Mouse.getEventY() * this.height / this.mc.displayHeight - 1;
+        int mouseX = org.lwjgl.input.Mouse.getEventX() * this.width / org.lwjgl.opengl.Display.getWidth();
+        int mouseY = this.height - org.lwjgl.input.Mouse.getEventY() * this.height / org.lwjgl.opengl.Display.getHeight() - 1;
         int left = (this.width - this.xSize) / 2;
 
         ComputerContainer container = (ComputerContainer) this.field_73875_a;
@@ -851,7 +881,7 @@ public class ComputerScreen extends GuiContainer {
                 int favIdx = slotNum(targetSlot) - 45;
                 // 🌟 サーバーの handleTabAction(5, ...) を呼び出すためのパケット送信
                 this.sendTabAction(5, favIdx, "", this.draggingStack);
-                this.mc.sndManager.playSoundFX("random.pop", 0.2F, 1.2F);
+                getSndManager().playSoundFX("random.pop", 0.2F, 1.2F);
             }
             // --- B. タブアイコンへのドロップ ---
             else if (relX >= this.xSize && relX <= this.xSize + 25) {
@@ -864,7 +894,7 @@ public class ComputerScreen extends GuiContainer {
                         // actionType 4: タブアイコン更新 を送信
                         // 個数は不要なので、サーバー側でコピーする際に1個として扱われます
                         this.sendTabAction(4, i, "", this.draggingStack);
-                        this.mc.sndManager.playSoundFX("random.orb", 0.2F, 1.0F); // 音を変えると分かりやすい
+                        getSndManager().playSoundFX("random.orb", 0.2F, 1.0F); // 音を変えると分かりやすい
                         break;
                     }
                 }
@@ -973,6 +1003,24 @@ public class ComputerScreen extends GuiContainer {
         ((ComputerContainer) this.field_73875_a).updateVisibleSlots();
         // サーバーに検索ワードを伝えるパケット送信処理をここに追加
     }
+    // GuiScreen のSRG名フィールドを読んで自クラスのシャドウフィールドに同期する
+    private void syncGuiFields() {
+        net.minecraft.client.Minecraft mcInst = net.minecraft.client.Minecraft.getMinecraft();
+        if (mcInst != null) this.mc = mcInst;
+        try { if (_gsW  != null) this.width  = _gsW.getInt(this); } catch (Exception ignored) {}
+        try { if (_gsH  != null) this.height = _gsH.getInt(this); } catch (Exception ignored) {}
+        try { if (_gsFR != null) this.fontRenderer = (net.minecraft.client.gui.FontRenderer) _gsFR.get(this); } catch (Exception ignored) {}
+    }
+    // Minecraft のSRG名フィールド (renderEngine/sndManager) へのリフレクションアクセサ
+    private net.minecraft.client.renderer.texture.RenderEngine getRenderEngine() {
+        if (_mcRE != null) try { return (net.minecraft.client.renderer.texture.RenderEngine) _mcRE.get(this.mc); } catch (Exception ignored) {}
+        return this.mc.renderEngine;
+    }
+    private net.minecraft.client.audio.SoundManager getSndManager() {
+        if (_mcSnd != null) try { return (net.minecraft.client.audio.SoundManager) _mcSnd.get(this.mc); } catch (Exception ignored) {}
+        return this.mc.sndManager;
+    }
+
     private net.minecraft.inventory.Slot getSlotAtPositionEx(int mouseX, int mouseY) {
         for (int i = 0; i < this.field_73875_a.field_75151_b.size(); ++i) {
             net.minecraft.inventory.Slot slot = (net.minecraft.inventory.Slot)this.field_73875_a.field_75151_b.get(i);
