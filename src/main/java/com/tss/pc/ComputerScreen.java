@@ -20,6 +20,10 @@ import net.minecraft.inventory.IInventory;
 
 
 public class ComputerScreen extends GuiContainer {
+    // GuiContainerのxSize/ySizeはランタイムでSRG名のためアクセス不可→自クラスでシャドウする
+    protected int xSize = 300;
+    protected int ySize = 222;
+
     // 1.5.2用のテクスチャ指定
     private static final String texturePath = "/mods/tss_pc/textures/gui/computer.png";
     private EntityPlayer thePlayer; // 🌟 プレイヤーを保持する変数
