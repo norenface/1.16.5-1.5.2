@@ -16,6 +16,37 @@ public class ComputerContainer extends Container {
     private ComputerBlockEntity tileEntity;
     private final EntityPlayer player;
 
+    // ランタイムでのaddSlotToContainerメソッドを動的に検索する
+    private static java.lang.reflect.Method containerAddSlot;
+    static {
+        for (java.lang.reflect.Method m : net.minecraft.inventory.Container.class.getDeclaredMethods()) {
+            Class<?>[] p = m.getParameterTypes();
+            if (p.length == 1 && net.minecraft.inventory.Slot.class.isAssignableFrom(p[0])) {
+                try { m.setAccessible(true); } catch (Exception e) {}
+                containerAddSlot = m;
+                System.out.println("DEBUG: Found addSlotToContainer method: " + m.getName() + " -> " + m.getReturnType().getSimpleName());
+                break;
+            }
+        }
+        if (containerAddSlot == null) {
+            System.out.println("DEBUG: addSlotToContainer not found via reflection, will use direct list manipulation");
+        }
+    }
+
+    private void addSlot(Slot slot) {
+        if (containerAddSlot != null) {
+            try {
+                containerAddSlot.invoke(this, slot);
+                return;
+            } catch (Exception e) {
+                System.err.println("DEBUG: addSlot reflection failed: " + e.getMessage());
+            }
+        }
+        // フォールバック：フィールドを直接操作
+        slot.slotNumber = this.field_75151_b.size();
+        this.field_75151_b.add(slot);
+    }
+
     // スクロール・フィルタ状態 (Screenから更新される)
     public float scrollPos = 0.0F;
     public float favScrollPos = 0.0F;
@@ -47,22 +78,22 @@ public class ComputerContainer extends Container {
 
         // 1. メインストレージ表示 (0-44)
         for (int i = 0; i < 45; i++) {
-            this.func_75125_e(new SlotReadOnly(storageView, i, 8 + (i % 9) * 18, 26 + (i / 9) * 18));
+            this.addSlot(new SlotReadOnly(storageView, i, 8 + (i % 9) * 18, 26 + (i / 9) * 18));
         }
 
         // 2. お気に入り (45-89)
         for (int i = 0; i < 45; i++) {
-            this.func_75125_e(new SlotReadOnly(favoriteView, i, 192 + (i % 5) * 18, 26 + (i / 5) * 18));
+            this.addSlot(new SlotReadOnly(favoriteView, i, 192 + (i % 5) * 18, 26 + (i / 5) * 18));
         }
 
         // 3. プレイヤーインベントリ (90-116)
         for (int i = 0; i < 27; i++) {
-            this.func_75125_e(new Slot(invPlayer, i + 9, 8 + (i % 9) * 18, 140 + (i / 9) * 18));
+            this.addSlot(new Slot(invPlayer, i + 9, 8 + (i % 9) * 18, 140 + (i / 9) * 18));
         }
 
         // 4. ホットバー (117-125)
         for (int i = 0; i < 9; i++) {
-            this.func_75125_e(new Slot(invPlayer, i, 8 + i * 18, 198));
+            this.addSlot(new Slot(invPlayer, i, 8 + i * 18, 198));
         }
 
         // デバッグ用：スロットがいくつ登録されたかコンソールに出す
