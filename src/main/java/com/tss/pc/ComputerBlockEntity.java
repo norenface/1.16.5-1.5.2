@@ -408,8 +408,36 @@ public class ComputerBlockEntity extends TileEntity {
     // プレイヤー名をキーにして、その人のタブリストを保持する
     private Map<String, List<FavoriteTab>> playerTabs = new HashMap<String, List<FavoriteTab>>();
 
+    // プレイヤー名取得（func_70005_cはランタイムに存在しないためリフレクションで代替）
+    private static String getPlayerName(EntityPlayer player) {
+        // (1) 'username' フィールドを試す（MC1.5.x EntityPlayerの公開フィールド）
+        try {
+            java.lang.reflect.Field f = net.minecraft.entity.player.EntityPlayer.class.getField("username");
+            String name = (String) f.get(player);
+            if (name != null && !name.isEmpty()) return name;
+        } catch (Exception ignored) {}
+        // (2) スーパークラスまで含めて全Stringフィールドを探す（MCユーザー名は2〜16文字の英数字）
+        Class<?> c = player.getClass();
+        while (c != null && c != Object.class) {
+            for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+                if (f.getType() == String.class) {
+                    try {
+                        f.setAccessible(true);
+                        String val = (String) f.get(player);
+                        if (val != null && val.length() >= 2 && val.length() <= 16
+                                && val.chars().allMatch(ch -> Character.isLetterOrDigit(ch) || ch == '_')) {
+                            return val;
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+            c = c.getSuperclass();
+        }
+        return "Player";
+    }
+
     public List<FavoriteTab> getTabsForPlayer(EntityPlayer player) {
-        String playerName = player.func_70005_c();
+        String playerName = getPlayerName(player);
         if (!playerTabs.containsKey(playerName)) {
             // 新規プレイヤーなら初期タブを作成
             List<FavoriteTab> newList = new ArrayList<FavoriteTab>();
