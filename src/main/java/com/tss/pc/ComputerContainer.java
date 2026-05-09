@@ -22,8 +22,8 @@ public class ComputerContainer extends Container {
     public String searchText = "";
     public String selectedMod = "all";
     public int selectedTabIndex = 0;
-    private InventoryBasic storageView = new InventoryBasic("StorageView", 45);
-    private InventoryBasic favoriteView = new InventoryBasic("FavoriteView", 45);
+    private InventoryBasic storageView = new InventoryBasic("StorageView", false, 45);
+    private InventoryBasic favoriteView = new InventoryBasic("FavoriteView", false, 45);
     // コンテナにお気に入り用のスクロール変数がない場合は追加
     public float favoriteScrollPos = 0.0F;
 
@@ -42,8 +42,8 @@ public class ComputerContainer extends Container {
         this.player = invPlayer.player;
 
         // 2. 仮想インベントリの初期化（nullチェックではなく毎回新規作成でOKです）
-        this.storageView = new InventoryBasic("StorageView", 45);
-        this.favoriteView = new InventoryBasic("FavoriteView", 45);
+        this.storageView = new InventoryBasic("StorageView", false, 45);
+        this.favoriteView = new InventoryBasic("FavoriteView", false, 45);
 
         // 1. メインストレージ表示 (0-44)
         for (int i = 0; i < 45; i++) {
