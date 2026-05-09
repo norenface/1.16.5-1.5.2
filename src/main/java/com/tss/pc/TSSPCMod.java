@@ -12,6 +12,7 @@ import cpw.mods.fml.common.registry.GameRegistry;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.creativetab.CreativeTabs;
+import net.minecraftforge.common.MinecraftForge;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -21,6 +22,7 @@ import java.lang.reflect.Method;
 public class TSSPCMod {
     public static final String MOD_ID = "tss_pc";
     public static final int GUI_ID = 1;
+    public static final int COMPUTER_BLOCK_ID = 500;
 
     @Instance(MOD_ID)
     public static TSSPCMod instance;
@@ -43,7 +45,8 @@ public class TSSPCMod {
     @Init
     public void load(FMLInitializationEvent event) {
         NetworkRegistry.instance().registerGuiHandler(this, new GuiHandler());
-        System.out.println("DEBUG: [TSSPC] GuiHandler REGISTERED AT INIT!");
+        MinecraftForge.EVENT_BUS.register(new BlockInteractHandler());
+        System.out.println("DEBUG: [TSSPC] GuiHandler + EventHandler REGISTERED AT INIT!");
     }
 
     // Use reflection to call setUnlocalizedName regardless of the actual SRG method name.
