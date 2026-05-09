@@ -62,9 +62,9 @@ public class ComputerScreen extends GuiContainer {
         private static net.minecraft.client.renderer.entity.RenderItem itemRenderer = new net.minecraft.client.renderer.entity.RenderItem();
 
 
-    public ComputerScreen(InventoryPlayer inventory, ComputerBlockEntity te) {
-            super(new ComputerContainer(inventory, te));
-              this.thePlayer = inventory.player; //
+    public ComputerScreen(InventoryPlayer inventory, EntityPlayer playerObj, ComputerBlockEntity te) {
+            super(new ComputerContainer(inventory, playerObj, te));
+            this.thePlayer = playerObj;
             this.tileEntity = te;
             this.xSize = 300; // 1.16.5のimageWidth
         this.ySize = 222; // 1.16.5のimageHeight

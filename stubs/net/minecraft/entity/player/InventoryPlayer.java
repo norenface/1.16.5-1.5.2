@@ -5,9 +5,8 @@ public class InventoryPlayer implements IInventory {
     public ItemStack[] field_70462_a = new ItemStack[36]; // mainInventory
     public ItemStack[] armorInventory = new ItemStack[4];
     public int field_70461_c = 0;  // currentItem
-    public EntityPlayer player;
     private ItemStack itemStack; // currently held (picked up) item
-    public InventoryPlayer(EntityPlayer player) { this.player = player; }
+    public InventoryPlayer(EntityPlayer player) {}
     public ItemStack func_70445_o() { return field_70461_c >= 0 && field_70461_c < field_70462_a.length ? field_70462_a[field_70461_c] : null; } // getCurrentItem
     public ItemStack getItemStack() { return itemStack; }
     public void setItemStack(ItemStack stack) { this.itemStack = stack; }

@@ -36,10 +36,10 @@ public class ComputerContainer extends Container {
     public int getTotalTabCount() {
         return tileEntity.getTabsForPlayer(player).size();
     }
-    public ComputerContainer(InventoryPlayer invPlayer, ComputerBlockEntity te) {
+    public ComputerContainer(InventoryPlayer invPlayer, EntityPlayer playerObj, ComputerBlockEntity te) {
         // 1. 基本情報のセット
         this.tileEntity = te;
-        this.player = invPlayer.player;
+        this.player = playerObj;
 
         // 2. 仮想インベントリの初期化（nullチェックではなく毎回新規作成でOKです）
         this.storageView = new InventoryBasic("StorageView", false, 45);

@@ -15,7 +15,7 @@ public class GuiHandler implements IGuiHandler {
         TileEntity te = world.func_72796_p(x, y, z);
         if (te instanceof ComputerBlockEntity) {
             System.out.println("=== [SERVER] Success: ComputerContainer created. ===");
-            return new ComputerContainer(player.field_71071_by, (ComputerBlockEntity) te);
+            return new ComputerContainer(player.field_71071_by, player, (ComputerBlockEntity) te);
         }
         System.out.println("=== [SERVER ERROR] TileEntity not found at " + x + "," + y + "," + z + " ===");
         return null;
@@ -25,7 +25,7 @@ public class GuiHandler implements IGuiHandler {
     public Object getClientGuiElement(int ID, EntityPlayer player, World world, int x, int y, int z) {
         TileEntity te = world.func_72796_p(x, y, z);
         if (te instanceof ComputerBlockEntity) {
-            return new ComputerScreen(player.field_71071_by, (ComputerBlockEntity) te);
+            return new ComputerScreen(player.field_71071_by, player, (ComputerBlockEntity) te);
         }
         return null;
     }
