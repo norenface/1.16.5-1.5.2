@@ -75,8 +75,8 @@ public class ComputerScreen extends GuiContainer {
     }
 
     @Override
-    public void initGui() {
-        super.initGui();
+    public void func_73866_w() {
+        super.func_73866_w();
         int left = (this.width - this.xSize) / 2;
         int top = (this.height - this.ySize) / 2;
 
@@ -96,7 +96,8 @@ public class ComputerScreen extends GuiContainer {
     }
 
     @Override
-    protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
+    protected void func_74185_a(float partialTicks, int mouseX, int mouseY) {
+        if (this.searchBox == null) return; // initGui未実行ガード
         this.mc.renderEngine.bindTexture("/font/default.png");
         int left = (this.width - this.xSize) / 2;
         int top = (this.height - this.ySize) / 2;
@@ -244,7 +245,7 @@ public class ComputerScreen extends GuiContainer {
     }
 
     @Override
-    public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+    public void func_73863_a(int mouseX, int mouseY, float partialTicks) {
         // 1. マウスの押し下げ状態を確認 (0: 左クリック)
         boolean isMouseDown = org.lwjgl.input.Mouse.isButtonDown(0);
         int left = (this.width - this.xSize) / 2;
@@ -286,7 +287,7 @@ public class ComputerScreen extends GuiContainer {
         }
 
         // 2. 基本の描画（背景やスロット、そして super で呼ばれる Foreground 描画）
-        super.drawScreen(mouseX, mouseY, partialTicks);
+        super.func_73863_a(mouseX, mouseY, partialTicks);
 
         // 3. ドラッグ中のアイテムアイコン描画 (あなたの既存コード)
         if (this.isDraggingItem && this.draggingStack != null) {
@@ -301,7 +302,7 @@ public class ComputerScreen extends GuiContainer {
     }
 
     @Override
-    protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
+    protected void func_74184_a(int mouseX, int mouseY) {
         this.fontRenderer.drawString("TSS_PC", 8, 12, 0xAAAAAA);
         this.fontRenderer.drawString("Inventory", 8, 126, 0xAAAAAA);
 
@@ -366,7 +367,7 @@ public class ComputerScreen extends GuiContainer {
         return String.valueOf(count);
     }
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void func_73864_a(int mouseX, int mouseY, int button) {
         this.searchBox.mouseClicked(mouseX, mouseY, button);
         this.tabNameField.mouseClicked(mouseX, mouseY, button);
 
@@ -567,7 +568,7 @@ public class ComputerScreen extends GuiContainer {
 
         // --- 5. 最後に通常のクリック処理 ---
         // 🌟 これが呼ばれることで Packet102WindowClick がサーバーへ送信されます。
-        super.mouseClicked(mouseX, mouseY, button);
+        super.func_73864_a(mouseX, mouseY, button);
     }
     // パケット送信用の補助メソッド
     private void sendTabPacket(int actionType, int index) {
@@ -643,7 +644,7 @@ public class ComputerScreen extends GuiContainer {
         }
     }
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void func_73869_a(char typedChar, int keyCode) {
 
         if (this.tabNameField.isFocused()) {
             // Enterキーが押されたら名前を保存
@@ -667,7 +668,7 @@ public class ComputerScreen extends GuiContainer {
         if (this.tabNameField.textboxKeyTyped(typedChar, keyCode)) {
             return;
         }
-        super.keyTyped(typedChar, keyCode);
+        super.func_73869_a(typedChar, keyCode);
     }
     @Override
     protected void handleMouseClick(net.minecraft.inventory.Slot slot, int slotId, int mouseButton, int mode) {
@@ -718,8 +719,8 @@ public class ComputerScreen extends GuiContainer {
     }
 
     @Override
-    public void handleMouseInput() {
-        super.handleMouseInput();
+    public void func_73867_d() {
+        super.func_73867_d();
         int wheel = org.lwjgl.input.Mouse.getEventDWheel();
         if (wheel == 0) return;
 
@@ -806,7 +807,7 @@ public class ComputerScreen extends GuiContainer {
         }
     }*/
     @Override
-    protected void mouseMovedOrUp(int mouseX, int mouseY, int which) {
+    protected void func_73869_b(int mouseX, int mouseY, int which) {
         if (which == 0 && this.isDraggingItem && this.draggingStack != null) {
             Slot targetSlot = this.getSlotAtPositionEx(mouseX, mouseY);
             int left = (this.width - this.xSize) / 2;
@@ -843,7 +844,7 @@ public class ComputerScreen extends GuiContainer {
             this.draggingStack = null;
             this.pressedSlotIndex = -1;
         }
-        super.mouseMovedOrUp(mouseX, mouseY, which);
+        super.func_73869_b(mouseX, mouseY, which);
     }
 
 
