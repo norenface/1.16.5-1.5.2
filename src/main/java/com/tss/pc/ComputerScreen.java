@@ -25,7 +25,7 @@ public class ComputerScreen extends GuiContainer {
     protected int ySize = 222;
     protected int width;
     protected int height;
-    protected net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+    protected net.minecraft.client.Minecraft mc;
     protected net.minecraft.client.gui.FontRenderer fontRenderer;
 
     // Slot フィールド (xDisplayPosition/yDisplayPosition/slotNumber) のSRG名が不明なためリフレクションで取得
@@ -50,6 +50,17 @@ public class ComputerScreen extends GuiContainer {
     // GuiScreen / Minecraft のSRG名フィールドをリフレクション取得
     private static java.lang.reflect.Field _gsW, _gsH, _gsFR;
     private static java.lang.reflect.Field _mcRE, _mcSnd;
+    // Minecraft シングルトン (getMinecraft() は SRG 名のため直接呼び出せない)
+    private static net.minecraft.client.Minecraft _mcSingleton;
+    // パケット送信用リフレクション
+    private static java.lang.reflect.Method _mcGetNetHandler;
+    private static java.lang.reflect.Method _nhAddToSendQueue;
+    private static java.lang.reflect.Field  _p250Channel, _p250Data, _p250Length;
+    // ItemStack フィールド/メソッド (SRG名のため直接アクセス不可)
+    private static java.lang.reflect.Field  _isItemID, _isStackSize, _isTagCompound;
+    private static java.lang.reflect.Method _isGetDamage, _isHasTag, _isGetTag;
+    // CompressedStreamTools.compress(NBTTagCompound)
+    private static java.lang.reflect.Method _csCompress;
     static {
         // GuiScreen: intフィールドの1番目=width, 2番目=height, FontRendererフィールド=fontRenderer
         java.util.List<java.lang.reflect.Field> gsInts = new java.util.ArrayList<>();
@@ -61,13 +72,83 @@ public class ComputerScreen extends GuiContainer {
         }
         if (gsInts.size() >= 1) _gsW = gsInts.get(0);
         if (gsInts.size() >= 2) _gsH = gsInts.get(1);
-        // Minecraft: RenderEngine と SoundManager
+
+        // Minecraft: static Minecraft フィールド (シングルトン) + RenderEngine + SoundManager
         for (java.lang.reflect.Field f : net.minecraft.client.Minecraft.class.getDeclaredFields()) {
             try { f.setAccessible(true); } catch (Exception ignored) {}
-            String sn = f.getType().getSimpleName();
-            if (sn.contains("RenderEngine")) _mcRE = f;
-            else if (sn.contains("SoundManager")) _mcSnd = f;
+            Class<?> ft = f.getType();
+            String sn = ft.getSimpleName();
+            if (sn.contains("RenderEngine")) { _mcRE = f; }
+            else if (sn.contains("SoundManager")) { _mcSnd = f; }
+            else if (ft == net.minecraft.client.Minecraft.class
+                    && java.lang.reflect.Modifier.isStatic(f.getModifiers())) {
+                try { Object v = f.get(null); if (v != null) _mcSingleton = (net.minecraft.client.Minecraft)v; }
+                catch (Exception ignored) {}
+            }
         }
+
+        // Minecraft.getNetHandler() → NetClientHandler
+        for (java.lang.reflect.Method m : net.minecraft.client.Minecraft.class.getMethods()) {
+            if (m.getParameterTypes().length == 0
+                    && m.getReturnType().getSimpleName().contains("NetClientHandler")) {
+                _mcGetNetHandler = m; break;
+            }
+        }
+
+        // NetClientHandler.addToSendQueue(Packet)
+        try {
+            Class<?> nhClass = Class.forName("net.minecraft.client.multiplayer.NetClientHandler");
+            for (java.lang.reflect.Method m : nhClass.getMethods()) {
+                Class<?>[] p = m.getParameterTypes();
+                if (p.length == 1 && p[0].getSimpleName().equals("Packet")) {
+                    _nhAddToSendQueue = m; break;
+                }
+            }
+        } catch (Exception ignored) {}
+
+        // Packet250CustomPayload: String=channel, byte[]=data, int=length
+        for (java.lang.reflect.Field f : net.minecraft.network.packet.Packet250CustomPayload.class.getDeclaredFields()) {
+            try { f.setAccessible(true); } catch (Exception ignored) {}
+            Class<?> t = f.getType();
+            if (t == String.class && _p250Channel == null) _p250Channel = f;
+            else if (t == byte[].class  && _p250Data   == null) _p250Data   = f;
+            else if (t == int.class     && _p250Length  == null) _p250Length  = f;
+        }
+
+        // ItemStack フィールド: int=itemID, int=stackSize, NBTTagCompound=stackTagCompound
+        {
+            java.util.List<java.lang.reflect.Field> isInts = new java.util.ArrayList<>();
+            for (java.lang.reflect.Field f : net.minecraft.item.ItemStack.class.getDeclaredFields()) {
+                try { f.setAccessible(true); } catch (Exception ignored) {}
+                Class<?> t = f.getType();
+                if (t == int.class) isInts.add(f);
+                else if (t.getSimpleName().contains("NBTTagCompound") && _isTagCompound == null)
+                    _isTagCompound = f;
+            }
+            if (isInts.size() >= 1) _isItemID    = isInts.get(0); // itemID
+            if (isInts.size() >= 2) _isStackSize  = isInts.get(1); // stackSize
+        }
+
+        // ItemStack メソッド: getItemDamage()int, hasTagCompound()bool, getTagCompound()NBTTagCompound
+        for (java.lang.reflect.Method m : net.minecraft.item.ItemStack.class.getMethods()) {
+            Class<?>[] p = m.getParameterTypes();
+            Class<?> r = m.getReturnType();
+            if (p.length == 0 && r == int.class     && _isGetDamage == null) _isGetDamage = m;
+            else if (p.length == 0 && r == boolean.class  && _isHasTag == null)   _isHasTag    = m;
+            else if (p.length == 0 && r.getSimpleName().contains("NBTTagCompound") && _isGetTag == null)
+                _isGetTag = m;
+        }
+
+        // CompressedStreamTools.compress(NBTTagCompound) → byte[]
+        try {
+            for (java.lang.reflect.Method m : net.minecraft.nbt.CompressedStreamTools.class.getMethods()) {
+                Class<?>[] p = m.getParameterTypes();
+                if (p.length == 1 && p[0].getSimpleName().contains("NBTTagCompound")
+                        && m.getReturnType() == byte[].class) {
+                    _csCompress = m; break;
+                }
+            }
+        } catch (Exception ignored) {}
     }
     private static int slotNum(net.minecraft.inventory.Slot s) {
         try { if (_slotNumber != null) return _slotNumber.getInt(s); } catch (Exception e) {}
@@ -130,7 +211,6 @@ public class ComputerScreen extends GuiContainer {
         this.tileEntity = te;
         this.xSize = 300;
         this.ySize = 222;
-        this.mc = net.minecraft.client.Minecraft.getMinecraft();
     }
 
     @Override
@@ -454,7 +534,7 @@ public class ComputerScreen extends GuiContainer {
                                 org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_RSHIFT);
                         int amount = isShift ? 64 : 1;
                         this.sendComputerPacket(2, 0, id, slot.func_75211_c(), amount);
-                        getSndManager().playSoundFX("random.click", 0.6F, 1.2F);
+                        playSoundFX("random.click", 0.6F, 1.2F);
                         return;
                     }
                 }
@@ -469,7 +549,7 @@ public class ComputerScreen extends GuiContainer {
                         boolean isShift = org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_LSHIFT);
                         int amount = isShift ? 64 : 1;
                         this.sendComputerPacket(2, 0, id, slot.func_75211_c(), amount);
-                        getSndManager().playSoundFX("random.click", 0.6F, 1.2F);
+                        playSoundFX("random.click", 0.6F, 1.2F);
                     }
                 }
 
@@ -483,7 +563,7 @@ public class ComputerScreen extends GuiContainer {
         }
         if (relY >= 190 && relY <= 200) {
             if (relX >= 233 && relX <= 258) { // [+Row] ボタン
-                getSndManager().playSoundFX("random.click", 1.0F, 1.2F);
+                playSoundFX("random.click", 1.0F, 1.2F);
 
                 // 🌟 サーバーへパケットを送るのをやめる（または通知のみにする）
                 // 🌟 代わりにクライアント側のリストを直接増やす
@@ -504,7 +584,7 @@ public class ComputerScreen extends GuiContainer {
 
             // B. [-Row] ボタンの範囲 (X: 260〜285付近)
             if (relX >= 260 && relX <= 285) {
-                getSndManager().playSoundFX("random.click", 1.0F, 0.8F);
+                playSoundFX("random.click", 1.0F, 0.8F);
 
                 // 🌟 Client主導: サーバーへパケットを送る必要はありません（または通知のみ）
                 // this.sendComputerPacket(1, 8, this.selectedTabIndex, null, 1); // 不要ならコメントアウト
@@ -566,7 +646,7 @@ public class ComputerScreen extends GuiContainer {
                     this.tabNameField.setText(tabsForClick.get(actualIndex).name);
 
                     sendTabAction(2, actualIndex, "", null);
-                    getSndManager().playSoundFX("random.click", 1.0F, 0.8F);
+                    playSoundFX("random.click", 1.0F, 0.8F);
                 }
                 return; // タブを処理したら終了
             }
@@ -576,7 +656,7 @@ public class ComputerScreen extends GuiContainer {
         if (relX >= this.xSize + 5 && relX <= this.xSize + 25) {
             // --- [+] 追加ボタン ---
             if (relY >= 190 && relY <= 200) {
-                getSndManager().playSoundFX("random.pop", 0.5F, 1.2F);
+                playSoundFX("random.pop", 0.5F, 1.2F);
 
                 java.util.List<ComputerBlockEntity.FavoriteTab> tabs = this.tileEntity.getTabsForPlayer(this.thePlayer);
 
@@ -600,7 +680,7 @@ public class ComputerScreen extends GuiContainer {
                 // 1. そもそもタブがない、または1個しかない場合は何もしない（ガード）
                 if (tabs.size() <= 1) return;
 
-                getSndManager().playSoundFX("random.click", 1.0F, 0.8F);
+                playSoundFX("random.click", 1.0F, 0.8F);
 
                 // 2. サーバーへ削除パケット送信
                 sendTabAction(1, this.selectedTabIndex, "", null);
@@ -636,17 +716,10 @@ public class ComputerScreen extends GuiContainer {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(bos);
         try {
-            dos.writeInt(1);          // packetId = 1 (TabAction)
-            dos.writeInt(actionType); // 0:追加, 1:削除 など
-            dos.writeInt(index);      // どのタブか
-
-            Packet250CustomPayload packet = new Packet250CustomPayload();
-            packet.channel = "TSS_PC";
-            packet.data = bos.toByteArray();
-            packet.length = bos.size();
-
-            // 🌟 (Packet) でキャストして送る
-            this.mc.getNetHandler().addToSendQueue((Packet) packet);
+            dos.writeInt(1);
+            dos.writeInt(actionType);
+            dos.writeInt(index);
+            sendToServer(bos.toByteArray());
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -655,28 +728,21 @@ public class ComputerScreen extends GuiContainer {
     public void sendTabAction(int actionType, int index, String name, ItemStack icon) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(bos);
-
         try {
-            // 1. パケットID (1: タブ操作)
             dos.writeByte(1);
-
-            // 2. ActionType (Int) と Index (Int)
             dos.writeInt(actionType);
             dos.writeInt(index);
-
-            // 3. Name (UTF)
             dos.writeUTF(name != null ? name : "");
 
-            // 4. ItemStack の書き込み (ここがサーバー側の readShort 等と対応)
             if (icon == null) {
                 dos.writeShort(-1);
             } else {
-                dos.writeShort(icon.itemID);
-                dos.writeByte(icon.stackSize);
-                dos.writeShort(icon.getItemDamage());
-
-                if (icon.hasTagCompound()) {
-                    byte[] nbtBytes = net.minecraft.nbt.CompressedStreamTools.compress(icon.getTagCompound());
+                dos.writeShort(isItemID(icon));
+                dos.writeByte(isStackSize(icon));
+                dos.writeShort(isGetDamage(icon));
+                net.minecraft.nbt.NBTTagCompound tag = isTagField(icon);
+                if (tag != null) {
+                    byte[] nbtBytes = compressNBT(tag);
                     dos.writeShort((short)nbtBytes.length);
                     dos.write(nbtBytes);
                 } else {
@@ -684,22 +750,11 @@ public class ComputerScreen extends GuiContainer {
                 }
             }
 
-            // 🌟 追記：現在のスクロール位置をパケットの末尾に追加
             ComputerContainer container = (ComputerContainer)this.field_73875_a;
-            dos.writeFloat(container.scrollPos);       // メインストレージ用
-            dos.writeFloat(this.favoriteScrollOffs);   // お気に入り用
+            dos.writeFloat(container.scrollPos);
+            dos.writeFloat(this.favoriteScrollOffs);
 
-            // 🌟 5. サーバーへ送信 (このログが出るか確認してください！)
-            Packet250CustomPayload packet = new Packet250CustomPayload();
-            packet.channel = "TSS_PC"; // サーバー側と大文字小文字を合わせる
-            packet.data = bos.toByteArray();
-            packet.length = bos.size();
-
-            System.out.println("CLIENT: Sending TabAction " + actionType + " (Size: " + packet.length + ")");
-
-            // Minecraft 1.5.2 の標準的なパケット送信
-            net.minecraft.client.Minecraft.getMinecraft().getNetHandler().addToSendQueue(packet);
-
+            sendToServer(bos.toByteArray());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -822,15 +877,7 @@ public class ComputerScreen extends GuiContainer {
         try {
             dos.writeByte(actionID);
             dos.writeInt(slotIndex);
-
-            Packet250CustomPayload packet = new Packet250CustomPayload();
-            packet.channel = "TSS_PC";
-            packet.data = bos.toByteArray();
-            packet.length = bos.size();
-
-            // 🌟 PacketDispatcherを使わない1.5.2の標準的な送り方
-            this.mc.getNetHandler().addToSendQueue(packet);
-
+            sendToServer(bos.toByteArray());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -881,7 +928,7 @@ public class ComputerScreen extends GuiContainer {
                 int favIdx = slotNum(targetSlot) - 45;
                 // 🌟 サーバーの handleTabAction(5, ...) を呼び出すためのパケット送信
                 this.sendTabAction(5, favIdx, "", this.draggingStack);
-                getSndManager().playSoundFX("random.pop", 0.2F, 1.2F);
+                playSoundFX("random.pop", 0.2F, 1.2F);
             }
             // --- B. タブアイコンへのドロップ ---
             else if (relX >= this.xSize && relX <= this.xSize + 25) {
@@ -894,7 +941,7 @@ public class ComputerScreen extends GuiContainer {
                         // actionType 4: タブアイコン更新 を送信
                         // 個数は不要なので、サーバー側でコピーする際に1個として扱われます
                         this.sendTabAction(4, i, "", this.draggingStack);
-                        getSndManager().playSoundFX("random.orb", 0.2F, 1.0F); // 音を変えると分かりやすい
+                        playSoundFX("random.orb", 0.2F, 1.0F); // 音を変えると分かりやすい
                         break;
                     }
                 }
@@ -927,13 +974,13 @@ public class ComputerScreen extends GuiContainer {
             dos.writeByte(packetId);
 
             if (packetId == 2) {
-                // --- 引き出し処理 ---
                 if (stack != null) {
-                    dos.writeShort((short)stack.itemID);
-                    dos.writeByte((byte)stack.stackSize);
-                    dos.writeShort((short)stack.getItemDamage());
-                    if (stack.stackTagCompound != null) {
-                        byte[] bytes = net.minecraft.nbt.CompressedStreamTools.compress(stack.stackTagCompound);
+                    dos.writeShort((short)isItemID(stack));
+                    dos.writeByte((byte)isStackSize(stack));
+                    dos.writeShort((short)isGetDamage(stack));
+                    net.minecraft.nbt.NBTTagCompound tag = isTagField(stack);
+                    if (tag != null) {
+                        byte[] bytes = compressNBT(tag);
                         dos.writeShort((short)bytes.length);
                         dos.write(bytes);
                     } else {
@@ -946,24 +993,21 @@ public class ComputerScreen extends GuiContainer {
                     dos.writeShort((short)-1);
                 }
                 dos.writeInt(amount);
-
-                // 🌟 追記：サーバー側の readFloat() と対応させる
                 ComputerContainer container = (ComputerContainer)this.field_73875_a;
                 dos.writeFloat(container.scrollPos);
                 dos.writeFloat(this.favoriteScrollOffs);
 
             } else if (packetId == 1) {
-                // --- タブ操作 ---
                 dos.writeInt(actionType);
                 dos.writeInt(index);
                 dos.writeUTF("");
-
                 if (stack != null) {
-                    dos.writeShort((short)stack.itemID);
-                    dos.writeByte((byte)stack.stackSize);
-                    dos.writeShort((short)stack.getItemDamage());
-                    if (stack.stackTagCompound != null) {
-                        byte[] bytes = net.minecraft.nbt.CompressedStreamTools.compress(stack.stackTagCompound);
+                    dos.writeShort((short)isItemID(stack));
+                    dos.writeByte((byte)isStackSize(stack));
+                    dos.writeShort((short)isGetDamage(stack));
+                    net.minecraft.nbt.NBTTagCompound tag = isTagField(stack);
+                    if (tag != null) {
+                        byte[] bytes = compressNBT(tag);
                         dos.writeShort((short)bytes.length);
                         dos.write(bytes);
                     } else {
@@ -972,27 +1016,15 @@ public class ComputerScreen extends GuiContainer {
                 } else {
                     dos.writeShort((short)-1);
                 }
-
-                // 🌟 追記：サーバー側の readFloat() と対応させる
                 ComputerContainer container = (ComputerContainer)this.field_73875_a;
                 dos.writeFloat(container.scrollPos);
                 dos.writeFloat(this.favoriteScrollOffs);
 
-
             } else if (packetId == 6) {
-                // --- 預け入れ処理 ---
-                dos.writeInt(index); // slotIndex
+                dos.writeInt(index);
             }
 
-            // 送信処理
-            net.minecraft.network.packet.Packet250CustomPayload packet = new net.minecraft.network.packet.Packet250CustomPayload();
-            packet.channel = "TSS_PC";
-            packet.data = bos.toByteArray();
-            packet.length = bos.size();
-
-            if (this.mc.getNetHandler() != null) {
-                this.mc.getNetHandler().addToSendQueue(packet);
-            }
+            sendToServer(bos.toByteArray());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -1003,22 +1035,94 @@ public class ComputerScreen extends GuiContainer {
         ((ComputerContainer) this.field_73875_a).updateVisibleSlots();
         // サーバーに検索ワードを伝えるパケット送信処理をここに追加
     }
+    // Minecraft シングルトンをリフレクションで取得 (getMinecraft() は SRG 名のため直接呼び出せない)
+    private static net.minecraft.client.Minecraft getMCInstance() {
+        if (_mcSingleton != null) return _mcSingleton;
+        for (java.lang.reflect.Field f : net.minecraft.client.Minecraft.class.getDeclaredFields()) {
+            try {
+                f.setAccessible(true);
+                if (java.lang.reflect.Modifier.isStatic(f.getModifiers())
+                        && f.getType() == net.minecraft.client.Minecraft.class) {
+                    Object v = f.get(null);
+                    if (v != null) { _mcSingleton = (net.minecraft.client.Minecraft) v; return _mcSingleton; }
+                }
+            } catch (Exception ignored) {}
+        }
+        return null;
+    }
+
     // GuiScreen のSRG名フィールドを読んで自クラスのシャドウフィールドに同期する
     private void syncGuiFields() {
-        net.minecraft.client.Minecraft mcInst = net.minecraft.client.Minecraft.getMinecraft();
+        net.minecraft.client.Minecraft mcInst = getMCInstance();
         if (mcInst != null) this.mc = mcInst;
         try { if (_gsW  != null) this.width  = _gsW.getInt(this); } catch (Exception ignored) {}
         try { if (_gsH  != null) this.height = _gsH.getInt(this); } catch (Exception ignored) {}
         try { if (_gsFR != null) this.fontRenderer = (net.minecraft.client.gui.FontRenderer) _gsFR.get(this); } catch (Exception ignored) {}
     }
+
     // Minecraft のSRG名フィールド (renderEngine/sndManager) へのリフレクションアクセサ
     private net.minecraft.client.renderer.texture.RenderEngine getRenderEngine() {
-        if (_mcRE != null) try { return (net.minecraft.client.renderer.texture.RenderEngine) _mcRE.get(this.mc); } catch (Exception ignored) {}
-        return this.mc.renderEngine;
+        if (_mcRE != null && this.mc != null) try { return (net.minecraft.client.renderer.texture.RenderEngine) _mcRE.get(this.mc); } catch (Exception ignored) {}
+        return null;
     }
     private net.minecraft.client.audio.SoundManager getSndManager() {
-        if (_mcSnd != null) try { return (net.minecraft.client.audio.SoundManager) _mcSnd.get(this.mc); } catch (Exception ignored) {}
-        return this.mc.sndManager;
+        if (_mcSnd != null && this.mc != null) try { return (net.minecraft.client.audio.SoundManager) _mcSnd.get(this.mc); } catch (Exception ignored) {}
+        return null;
+    }
+
+    // Packet250CustomPayload を作りサーバーへ送信 (channel/data/length もSRG名のためリフレクション)
+    private void sendToServer(byte[] data) {
+        try {
+            net.minecraft.client.Minecraft mcInst = (this.mc != null) ? this.mc : getMCInstance();
+            if (mcInst == null || _mcGetNetHandler == null || _nhAddToSendQueue == null) return;
+            Object nh = _mcGetNetHandler.invoke(mcInst);
+            if (nh == null) return;
+            net.minecraft.network.packet.Packet250CustomPayload pkt =
+                    new net.minecraft.network.packet.Packet250CustomPayload();
+            if (_p250Channel != null) _p250Channel.set(pkt, "TSS_PC"); else pkt.channel = "TSS_PC";
+            if (_p250Data    != null) _p250Data.set(pkt, data);         else pkt.data    = data;
+            if (_p250Length  != null) _p250Length.setInt(pkt, data.length); else pkt.length = data.length;
+            _nhAddToSendQueue.invoke(nh, pkt);
+        } catch (Exception e) {
+            System.out.println("DEBUG: sendToServer err: " + e);
+        }
+    }
+
+    // ItemStack フィールド/メソッドのリフレクションアクセサ
+    private static int isItemID(net.minecraft.item.ItemStack s) {
+        if (_isItemID != null) try { return _isItemID.getInt(s); } catch (Exception ignored) {}
+        return s.itemID;
+    }
+    private static int isStackSize(net.minecraft.item.ItemStack s) {
+        if (_isStackSize != null) try { return _isStackSize.getInt(s); } catch (Exception ignored) {}
+        return s.stackSize;
+    }
+    private static int isGetDamage(net.minecraft.item.ItemStack s) {
+        if (_isGetDamage != null) try { return (Integer)_isGetDamage.invoke(s); } catch (Exception ignored) {}
+        return s.getItemDamage();
+    }
+    private static boolean isHasTag(net.minecraft.item.ItemStack s) {
+        if (_isHasTag != null) try { return (Boolean)_isHasTag.invoke(s); } catch (Exception ignored) {}
+        return s.hasTagCompound();
+    }
+    private static net.minecraft.nbt.NBTTagCompound isGetTag(net.minecraft.item.ItemStack s) {
+        if (_isGetTag != null) try { return (net.minecraft.nbt.NBTTagCompound)_isGetTag.invoke(s); } catch (Exception ignored) {}
+        return s.getTagCompound();
+    }
+    private static net.minecraft.nbt.NBTTagCompound isTagField(net.minecraft.item.ItemStack s) {
+        if (_isTagCompound != null) try { return (net.minecraft.nbt.NBTTagCompound)_isTagCompound.get(s); } catch (Exception ignored) {}
+        return s.stackTagCompound;
+    }
+    private static byte[] compressNBT(net.minecraft.nbt.NBTTagCompound tag) {
+        if (_csCompress != null) try { return (byte[])_csCompress.invoke(null, tag); } catch (Exception ignored) {}
+        try { return net.minecraft.nbt.CompressedStreamTools.compress(tag); } catch (Exception e) { return new byte[0]; }
+    }
+
+    // Minecraft のSRG名フィールド (renderEngine/sndManager) へのリフレクションアクセサ
+    // (getSndManager が null を返す場合に playSoundFX を呼ばないガード付き)
+    private void playSoundFX(String name, float vol, float pitch) {
+        net.minecraft.client.audio.SoundManager sm = getSndManager();
+        if (sm != null) sm.playSoundFX(name, vol, pitch);
     }
 
     private net.minecraft.inventory.Slot getSlotAtPositionEx(int mouseX, int mouseY) {
