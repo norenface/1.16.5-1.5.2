@@ -98,26 +98,6 @@ public class ComputerContainer extends Container {
 
         // デバッグ用：スロットがいくつ登録されたかコンソールに出す
         System.out.println("DEBUG: Container initialized. Total slots: " + this.field_75151_b.size());
-
-        // 🛡️ 転送処理等の設定
-        if (this.tileEntity != null && this.tileEntity.getBulkStorage() != null) {
-            this.tileEntity.getBulkStorage().setOnContentsChanged(new Runnable() {
-                @Override
-                public void run() {
-                    updateVisibleSlots();
-                }
-            });
-        }
-        // コンストラクタの最後の } の直前に追加
-        System.out.println("=== CONTAINER DEBUG START ===");
-        System.out.println("Side: " + (this.player.field_70170_p.field_72995_K ? "CLIENT" : "SERVER"));
-        System.out.println("Total Registered Slots: " + this.field_75151_b.size());
-        for (int i = 0; i < this.field_75151_b.size(); i++) {
-            Slot s = (Slot)this.field_75151_b.get(i);
-            // 110番目のスロットがどこを指しているか確認
-            if (i == 110) System.out.println("SLOT 110: " + s.inventory.func_70303_a());
-        }
-        System.out.println("=== CONTAINER DEBUG END ===");
         // 最初の表示を更新
         updateVisibleSlots();
     }
