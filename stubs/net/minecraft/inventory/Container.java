@@ -4,7 +4,7 @@ import net.minecraft.entity.player.EntityPlayer;
 import java.util.*;
 public abstract class Container {
     public List field_75151_b = new ArrayList(); // inventorySlots
-    protected Slot func_75125_e(Slot slot) { slot.slotNumber = field_75151_b.size(); field_75151_b.add(slot); return slot; } // addSlotToContainer
+    protected void func_75125_e(Slot slot) { slot.slotNumber = field_75151_b.size(); field_75151_b.add(slot); } // addSlotToContainer
     public abstract boolean func_75145_c(EntityPlayer player); // canInteractWith
     public ItemStack func_75140_a(int slotId, int button, int modifier, EntityPlayer player) { return null; } // slotClick
     public ItemStack func_75150_a(EntityPlayer player, int slotIndex) { return null; } // transferStackInSlot
