@@ -73,6 +73,8 @@ public class ComputerScreen extends GuiContainer {
     private static java.lang.reflect.Method _riRenderItem;
     // NBTTagCompound メソッド (SRG名のためリフレクション)
     private static java.lang.reflect.Method _nbtHasKey, _nbtGetInteger;
+    // GuiScreen.drawRect (static, SRG名のためリフレクション) — GL11直接描画の代わりに使う
+    private static java.lang.reflect.Method _gsDrawRect;
 
     static {
         // GuiScreen: intフィールドの1番目=width, 2番目=height, FontRendererフィールド=fontRenderer
@@ -85,6 +87,23 @@ public class ComputerScreen extends GuiContainer {
         }
         if (gsInts.size() >= 1) _gsW = gsInts.get(0);
         if (gsInts.size() >= 2) _gsH = gsInts.get(1);
+
+        // GuiScreen.drawRect: static メソッド (int,int,int,int,int)→void を取得
+        // Minecraftの本物のdrawRect (Tessellatorベース) をリフレクション経由で呼ぶことで
+        // GL11直接描画のGL状態問題を回避する
+        for (java.lang.reflect.Method m : net.minecraft.client.gui.GuiScreen.class.getDeclaredMethods()) {
+            try { m.setAccessible(true); } catch (Throwable ig) {}
+            Class<?>[] p = m.getParameterTypes();
+            if (p.length == 5
+                    && java.lang.reflect.Modifier.isStatic(m.getModifiers())
+                    && p[0] == int.class && p[1] == int.class && p[2] == int.class
+                    && p[3] == int.class && p[4] == int.class
+                    && m.getReturnType() == void.class
+                    && _gsDrawRect == null) {
+                _gsDrawRect = m;
+                System.out.println("DEBUG: Found GuiScreen.drawRect: " + m.getName());
+            }
+        }
 
         // Minecraft: static Minecraft フィールド (シングルトン) + RenderEngine + SoundManager
         for (java.lang.reflect.Field f : net.minecraft.client.Minecraft.class.getDeclaredFields()) {
@@ -1121,10 +1140,17 @@ public class ComputerScreen extends GuiContainer {
     }
 
     // -------------------------------------------------------------------------
-    // GL11 直接描画による矩形描画 (GuiScreen.drawRect は SRG 名のため使用不可)
+    // 矩形描画 — MinecraftのdrawRect(Tessellatorベース)をリフレクション経由で呼ぶ
+    // GL11直接描画(glBegin/glEnd)はMinecraftのレンダリングコンテキストで
+    // 正しく動作しないためフォールバック専用とする
     // -------------------------------------------------------------------------
 
     private static void drawColoredRect(int x1, int y1, int x2, int y2, int color) {
+        // 第一優先: MinecraftのGuiScreen.drawRect (Tessellatorベース、SRG名をリフレクションで取得)
+        if (_gsDrawRect != null) {
+            try { _gsDrawRect.invoke(null, x1, y1, x2, y2, color); return; } catch (Throwable ig) {}
+        }
+        // フォールバック: GL11即時描画
         int alpha = (color >> 24) & 0xFF;
         int red   = (color >> 16) & 0xFF;
         int green = (color >>  8) & 0xFF;
