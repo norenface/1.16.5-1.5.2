@@ -26,4 +26,12 @@ public class GL11 {
     public static void glScissor(int x, int y, int width, int height) {}
     public static void glLineWidth(float width) {}
     public static void glDepthMask(boolean flag) {}
+    public static final int GL_QUADS = 0x0007;
+    public static final int GL_TRIANGLE_STRIP = 0x0005;
+    public static void glBegin(int mode) {}
+    public static void glEnd() {}
+    public static void glVertex2f(float x, float y) {}
+    public static void glVertex3f(float x, float y, float z) {}
+    public static void glTexCoord2f(float s, float t) {}
+    public static void glNormal3f(float nx, float ny, float nz) {}
 }
