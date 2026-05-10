@@ -69,8 +69,12 @@ public class ComputerScreen extends GuiContainer {
     private static java.lang.reflect.Method _frDrawString, _frDrawStringShadow, _frGetStringWidth;
     // RenderEngine.bindTexture (SRG名のためリフレクション)
     private static java.lang.reflect.Method _reBind;
-    // RenderItem.renderItemAndEffectIntoGUI (SRG名のためリフレクション)
+    // RenderItem (Class.forName で遅延ロード — <clinit>で直接参照するとClassNotFoundになる)
     private static java.lang.reflect.Method _riRenderItem;
+    private static java.lang.reflect.Field  _riZLevel;
+    // RenderHelper static methods (SRG名のためリフレクション)
+    private static java.lang.reflect.Method _rhEnableGUI;
+    private static java.lang.reflect.Method _rhDisable;
     // NBTTagCompound メソッド (SRG名のためリフレクション)
     private static java.lang.reflect.Method _nbtHasKey, _nbtGetInteger;
     // GuiScreen.drawRect (static, SRG名のためリフレクション) — GL11直接描画の代わりに使う
@@ -243,26 +247,47 @@ public class ComputerScreen extends GuiContainer {
             if (frStrMethods.size() >= 2) _frDrawStringShadow = frStrMethods.get(1);
         } catch (Exception ignored) {}
 
-        // RenderEngine.bindTexture (SRG名のためリフレクション)
+        // RenderEngine.bindTexture — .class直接参照はFMLクラスローダーでNPEになるためClass.forNameで回避
         try {
-            for (java.lang.reflect.Method m : net.minecraft.client.renderer.texture.RenderEngine.class.getDeclaredMethods()) {
-                try { m.setAccessible(true); } catch (Exception ig) {}
+            Class<?> reClass = Class.forName("net.minecraft.client.renderer.texture.RenderEngine");
+            for (java.lang.reflect.Method m : reClass.getDeclaredMethods()) {
+                try { m.setAccessible(true); } catch (Throwable ig) {}
                 Class<?>[] p = m.getParameterTypes();
-                if (p.length == 1 && p[0] == String.class && _reBind == null) { _reBind = m; }
+                if (p.length == 1 && p[0] == String.class && _reBind == null) { _reBind = m; break; }
             }
-        } catch (Exception ignored) {}
+        } catch (Throwable ignored) {}
 
-        // RenderItem.renderItemAndEffectIntoGUI (SRG名のためリフレクション)
+        // RenderItem — 同様にClass.forNameで安全にロード、インスタンス生成とzLevelフィールドも取得
         try {
-            for (java.lang.reflect.Method m : net.minecraft.client.renderer.entity.RenderItem.class.getDeclaredMethods()) {
-                try { m.setAccessible(true); } catch (Exception ig) {}
+            Class<?> riClass = Class.forName("net.minecraft.client.renderer.entity.RenderItem");
+            itemRenderer = riClass.newInstance();
+            for (java.lang.reflect.Method m : riClass.getDeclaredMethods()) {
+                try { m.setAccessible(true); } catch (Throwable ig) {}
                 Class<?>[] p = m.getParameterTypes();
                 if (p.length == 5 && p[2].getSimpleName().contains("ItemStack")
                         && p[3] == int.class && p[4] == int.class && _riRenderItem == null) {
                     _riRenderItem = m;
                 }
             }
-        } catch (Exception ignored) {}
+            for (java.lang.reflect.Field f : riClass.getDeclaredFields()) {
+                try { f.setAccessible(true); } catch (Throwable ig) {}
+                if (f.getType() == float.class && _riZLevel == null) { _riZLevel = f; break; }
+            }
+        } catch (Throwable ignored) {}
+
+        // RenderHelper static methods (enableGUIStandardItemLighting / disableStandardItemLighting)
+        try {
+            Class<?> rhClass = Class.forName("net.minecraft.client.renderer.RenderHelper");
+            for (java.lang.reflect.Method m : rhClass.getDeclaredMethods()) {
+                try { m.setAccessible(true); } catch (Throwable ig) {}
+                if (m.getParameterTypes().length == 0 && m.getReturnType() == void.class
+                        && !java.lang.reflect.Modifier.isStatic(m.getModifiers())) continue;
+                if (m.getParameterTypes().length == 0 && m.getReturnType() == void.class) {
+                    if (_rhEnableGUI == null) _rhEnableGUI = m;
+                    else if (_rhDisable == null) { _rhDisable = m; break; }
+                }
+            }
+        } catch (Throwable ignored) {}
 
         // NBTTagCompound: hasKey(String)→bool, getInteger(String)→int (SRG名のためリフレクション)
         try {
@@ -324,8 +349,8 @@ public class ComputerScreen extends GuiContainer {
     private int selectedTabIndex = 0;
 
     private final int MAX_TABS = 9;
-    private static net.minecraft.client.renderer.entity.RenderItem itemRenderer =
-            new net.minecraft.client.renderer.entity.RenderItem();
+    // RenderItem は Class.forName で static ブロック内で初期化 (直接型参照でクラスロード失敗を防ぐ)
+    private static Object itemRenderer = null;
 
     // GuiContainer.inventorySlots の SRG 名が違うため、コンテナを super に渡す前に変数に保存する
     public ComputerScreen(InventoryPlayer inventory, EntityPlayer playerObj, ComputerBlockEntity te) {
@@ -361,7 +386,7 @@ public class ComputerScreen extends GuiContainer {
     @Override
     protected void func_74185_a(float partialTicks, int mouseX, int mouseY) {
         if (this.searchBox == null) return;
-        net.minecraft.client.renderer.texture.RenderEngine re = getRenderEngine();
+        Object re = getRenderEngine();
         if (re != null) reBind(re, "/font/default.png");
         int left = (this.width - this.xSize) / 2;
         int top = (this.height - this.ySize) / 2;
@@ -445,7 +470,7 @@ public class ComputerScreen extends GuiContainer {
         // タブアイコン描画
         int tabSpacing = 20;
         java.util.List<ComputerBlockEntity.FavoriteTab> tabs = this.tileEntity.getTabsForPlayer(this.thePlayer);
-        net.minecraft.client.renderer.texture.RenderEngine reForTabs = getRenderEngine();
+        Object reForTabs = getRenderEngine();
 
         for (int i = 0; i < MAX_VISIBLE_TABS; i++) {
             int actualIndex = i + this.tabScrollOffset;
@@ -463,9 +488,9 @@ public class ComputerScreen extends GuiContainer {
             }
 
             if (currentTab.icon != null) {
-                net.minecraft.client.renderer.RenderHelper.enableGUIStandardItemLighting();
+                rhEnableGUI();
                 riRenderItem(itemRenderer, this.fontRenderer, reForTabs, currentTab.icon, iconX, iconY);
-                net.minecraft.client.renderer.RenderHelper.disableStandardItemLighting();
+                rhDisable();
             } else {
                 String numStr = String.valueOf(actualIndex + 1);
                 frDrawStr(this.fontRenderer, numStr, iconX + (numStr.length() > 1 ? 0 : 4), iconY + 4, 0xAAAAAA);
@@ -508,10 +533,11 @@ public class ComputerScreen extends GuiContainer {
         if (this.isDraggingItem && this.draggingStack != null) {
             GL11.glPushMatrix();
             GL11.glTranslatef(0, 0, 500);
-            net.minecraft.client.renderer.RenderHelper.enableGUIStandardItemLighting();
-            itemRenderer.zLevel = 200.0F;
+            rhEnableGUI();
+            riSetZLevel(200.0F);
             riRenderItem(itemRenderer, this.fontRenderer, getRenderEngine(), this.draggingStack, mouseX - 8, mouseY - 8);
-            itemRenderer.zLevel = 0.0F;
+            riSetZLevel(0.0F);
+            rhDisable();
             GL11.glPopMatrix();
         }
     }
@@ -976,10 +1002,10 @@ public class ComputerScreen extends GuiContainer {
         try { if (_gsFR != null) this.fontRenderer = (net.minecraft.client.gui.FontRenderer) _gsFR.get(this); } catch (Exception ignored) {}
     }
 
-    private net.minecraft.client.renderer.texture.RenderEngine getRenderEngine() {
+    private Object getRenderEngine() {
         if (_mcRE != null && this.mc != null) try {
-            return (net.minecraft.client.renderer.texture.RenderEngine) _mcRE.get(this.mc);
-        } catch (Exception ignored) {}
+            return _mcRE.get(this.mc);
+        } catch (Throwable ignored) {}
         return null;
     }
 
@@ -1123,20 +1149,29 @@ public class ComputerScreen extends GuiContainer {
     // RenderEngine / RenderItem プロキシ
     // -------------------------------------------------------------------------
 
-    private static void reBind(net.minecraft.client.renderer.texture.RenderEngine re, String path) {
+    private static void reBind(Object re, String path) {
         if (re == null) return;
         if (_reBind != null) try { _reBind.invoke(re, path); return; } catch (Throwable ig) {}
-        try { re.bindTexture(path); } catch (Throwable ignored) {}
     }
 
-    private static void riRenderItem(
-            net.minecraft.client.renderer.entity.RenderItem ri,
-            net.minecraft.client.gui.FontRenderer fr,
-            net.minecraft.client.renderer.texture.RenderEngine re,
-            net.minecraft.item.ItemStack is, int x, int y) {
+    private static void riRenderItem(Object ri, Object fr, Object re, net.minecraft.item.ItemStack is, int x, int y) {
         if (ri == null || is == null) return;
         if (_riRenderItem != null) try { _riRenderItem.invoke(ri, fr, re, is, x, y); return; } catch (Throwable ig) {}
-        try { ri.renderItemAndEffectIntoGUI(fr, re, is, x, y); } catch (Throwable ignored) {}
+    }
+
+    private static void riSetZLevel(float z) {
+        if (_riZLevel != null && itemRenderer != null)
+            try { _riZLevel.setFloat(itemRenderer, z); } catch (Throwable ig) {}
+    }
+
+    private static void rhEnableGUI() {
+        if (_rhEnableGUI != null) try { _rhEnableGUI.invoke(null); return; } catch (Throwable ig) {}
+        try { net.minecraft.client.renderer.RenderHelper.enableGUIStandardItemLighting(); } catch (Throwable ig) {}
+    }
+
+    private static void rhDisable() {
+        if (_rhDisable != null) try { _rhDisable.invoke(null); return; } catch (Throwable ig) {}
+        try { net.minecraft.client.renderer.RenderHelper.disableStandardItemLighting(); } catch (Throwable ig) {}
     }
 
     // -------------------------------------------------------------------------
