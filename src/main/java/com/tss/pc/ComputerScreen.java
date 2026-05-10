@@ -586,7 +586,7 @@ public class ComputerScreen extends GuiContainer {
             int id = slotNum(slot);
 
             if (id >= 0 && id < 45) {
-                if (this.thePlayer.field_71071_by.getItemStack() == null && slot.func_75216_f()) {
+                if (MCHelper.invGetItemStack(this.thePlayer.field_71071_by) == null && slot.func_75216_f()) {
                     if (button == 0) {
                         this.isDraggingItem = true;
                         this.draggingStack = MCHelper.itemCopy(slot.func_75211_c());
@@ -600,7 +600,7 @@ public class ComputerScreen extends GuiContainer {
                     }
                 }
             } else if (id >= 45 && id < 90) {
-                if (this.thePlayer.field_71071_by.getItemStack() == null && slot.func_75216_f()) {
+                if (MCHelper.invGetItemStack(this.thePlayer.field_71071_by) == null && slot.func_75216_f()) {
                     if (button == 0 || button == 1) {
                         boolean isShift = org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_LSHIFT);
                         int amount = isShift ? 64 : 1;
@@ -651,7 +651,7 @@ public class ComputerScreen extends GuiContainer {
 
             int tabYStart = 10 + (i * 20);
             if (relX >= this.xSize && relX <= this.xSize + 25 && relY >= tabYStart && relY <= tabYStart + 20) {
-                net.minecraft.item.ItemStack heldItem = this.thePlayer.field_71071_by.getItemStack();
+                net.minecraft.item.ItemStack heldItem = MCHelper.invGetItemStack(this.thePlayer.field_71071_by);
                 if (button == 2) {
                     sendTabAction(4, actualIndex, "", null);
                 } else if (heldItem != null) {
@@ -781,7 +781,7 @@ public class ComputerScreen extends GuiContainer {
         }
 
         if (slotId >= 0 && slotId < 45) {
-            net.minecraft.item.ItemStack heldStack = this.thePlayer.field_71071_by.getItemStack();
+            net.minecraft.item.ItemStack heldStack = MCHelper.invGetItemStack(this.thePlayer.field_71071_by);
             if (heldStack != null) {
                 this.sendComputerPacket(6, 0, slotId, heldStack, 0);
                 return;
@@ -795,7 +795,7 @@ public class ComputerScreen extends GuiContainer {
         }
 
         if (slotId >= 45 && slotId < 90) {
-            this.sendComputerPacket(1, 5, slotId - 45, this.thePlayer.field_71071_by.getItemStack(), 0);
+            this.sendComputerPacket(1, 5, slotId - 45, MCHelper.invGetItemStack(this.thePlayer.field_71071_by), 0);
             return;
         }
 

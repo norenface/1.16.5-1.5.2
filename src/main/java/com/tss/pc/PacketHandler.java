@@ -256,7 +256,7 @@ public class PacketHandler implements IPacketHandler {
         // 🌟 スロット番号からアイテムを特定する
         if (slotIndex == -999) {
             // マウスで掴んでいるアイテム
-            stackInSlot = player.field_71071_by.getItemStack();
+            stackInSlot = MCHelper.invGetItemStack(player.field_71071_by);
         } else if (slotIndex >= 0 && slotIndex < player.field_71071_by.field_70462_a.length) {
             // インベントリ内の指定スロットのアイテム
             stackInSlot = player.field_71071_by.func_70301_a(slotIndex);
@@ -269,7 +269,7 @@ public class PacketHandler implements IPacketHandler {
 
             // 2. インベントリ側を空にする
             if (slotIndex == -999) {
-                player.field_71071_by.setItemStack(null);
+                MCHelper.invSetItemStack(player.field_71071_by, null);
             } else {
                 player.field_71071_by.func_70299_a(slotIndex, null);
             }
@@ -278,7 +278,7 @@ public class PacketHandler implements IPacketHandler {
             if (player instanceof net.minecraft.entity.player.EntityPlayerMP) {
                 net.minecraft.entity.player.EntityPlayerMP playerMP = (net.minecraft.entity.player.EntityPlayerMP) player;
                 playerMP.func_70483_a(container);
-                playerMP.updateHeldItem();
+                try { playerMP.updateHeldItem(); } catch (Throwable ignored) {}
             }
             te.func_70296_a();
         }
@@ -289,9 +289,13 @@ public class PacketHandler implements IPacketHandler {
      */
     private boolean isSameItem(ItemStack s1, ItemStack s2) {
         if (s1 == null || s2 == null) return false;
-        return s1.itemID == s2.itemID &&
-                s1.getItemDamage() == s2.getItemDamage() &&
-                ItemStack.areItemStackTagsEqual(s1, s2);
+        if (s1.itemID != s2.itemID || s1.itemDamage != s2.itemDamage) return false;
+        // NBTタグ比較: equalsはObjectから継承されており安全に呼べる
+        NBTTagCompound t1 = s1.stackTagCompound;
+        NBTTagCompound t2 = s2.stackTagCompound;
+        if (t1 == null && t2 == null) return true;
+        if (t1 == null || t2 == null) return false;
+        return t1.equals(t2);
     }
 
     private void handleWithdraw(ItemStack stack, int amount, EntityPlayer player, ComputerBlockEntity te, ComputerContainer container) {
@@ -319,7 +323,7 @@ public class PacketHandler implements IPacketHandler {
                         favStack.stackSize = (totalInStorage > 0) ? totalInStorage : 1; // 0個でもアイコンは消さない
 
                         if (favStack.stackTagCompound != null) {
-                            favStack.stackTagCompound.setInteger("RealCount", totalInStorage);
+                            MCHelper.nbtSetInteger(favStack.stackTagCompound, "RealCount", totalInStorage);
                         }
                     }
                 }

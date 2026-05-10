@@ -140,7 +140,7 @@ public class ComputerContainer extends Container {
                 ItemStack s = MCHelper.itemCopy(filtered.get(index));
                 int realCount = storage.getItemCount(s);
                 if (s.stackTagCompound == null) s.stackTagCompound = new NBTTagCompound();
-                s.stackTagCompound.setInteger("RealCount", realCount);
+                MCHelper.nbtSetInteger(s.stackTagCompound, "RealCount", realCount);
                 s.stackSize = 1;
                 storageView.func_70299_a(i, s);
             } else {
@@ -173,7 +173,7 @@ public class ComputerContainer extends Container {
                         if (displayStack.stackTagCompound == null) {
                             displayStack.stackTagCompound = new NBTTagCompound();
                         }
-                        displayStack.stackTagCompound.setInteger("RealCount", realCount);
+                        MCHelper.nbtSetInteger(displayStack.stackTagCompound, "RealCount", realCount);
                         displayStack.stackSize = 1;
 
                         this.favoriteView.func_70299_a(i, displayStack);
@@ -209,7 +209,7 @@ public class ComputerContainer extends Container {
                     System.out.println(side + " Attempting Withdraw: Slot " + slotId);
 
                     // 右クリックなら1個、それ以外なら最大スタック数
-                    int amount = (button == 1) ? 1 : slot.func_75211_c().getMaxStackSize();
+                    int amount = (button == 1) ? 1 : 64;
 
                     // 実際の引き出し処理
                     this.handleWithdraw(slotId, amount, player);
@@ -257,7 +257,7 @@ public class ComputerContainer extends Container {
                         if (actualFavIndex < currentTab.slots.size()) {
                             ItemStack favItem = currentTab.slots.get(actualFavIndex);
                             if (favItem != null) {
-                                int withdrawAmount = (button == 1) ? 1 : favItem.getMaxStackSize();
+                                int withdrawAmount = (button == 1) ? 1 : 64;
                                 this.tileEntity.getBulkStorage().withdrawStack(player, favItem, withdrawAmount);
                             }
                         }

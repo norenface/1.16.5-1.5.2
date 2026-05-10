@@ -4,6 +4,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTBase;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
+import net.minecraft.entity.player.InventoryPlayer;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
@@ -25,6 +26,17 @@ public final class MCHelper {
     private static Method nbtAppendTag;      // appendTag(NBTBase) → void
     private static Method nbtTagAt;          // tagAt(int) → NBTBase
     private static Method nbtTagCount;       // tagCount() → int
+
+    // === NBTTagCompound スカラーメソッド (SRG名のためリフレクション) ===
+    private static Method nbtSetInteger;     // setInteger(String, int) → void
+    private static Method nbtGetInteger;     // getInteger(String) → int
+    private static Method nbtSetString;      // setString(String, String) → void
+    private static Method nbtGetString;      // getString(String) → String
+    private static Method nbtHasKey;         // hasKey(String) → boolean
+
+    // === InventoryPlayer カーソルアイテム ===
+    private static Method invGetItemStack;   // getItemStack() → ItemStack
+    private static Method invSetItemStack;   // setItemStack(ItemStack) → void
 
     // === ItemStack ===
     private static Method itemCopy;          // copy() → ItemStack
@@ -134,6 +146,41 @@ public final class MCHelper {
             }
         } catch (Exception e) { System.out.println("DEBUG: [TSSPC] MCH tagCount err: " + e); }
 
+        // --- NBTTagCompound スカラーメソッド: setInteger(String,int)→void / getInteger(String)→int
+        //     setString(String,String)→void / getString(String)→String / hasKey(String)→boolean ---
+        try {
+            for (Method m : cCompound.getDeclaredMethods()) {
+                try { m.setAccessible(true); } catch (Throwable ig) {}
+                Class<?>[] p = m.getParameterTypes();
+                Class<?> r = m.getReturnType();
+                if (p.length == 2 && p[0] == String.class && p[1] == int.class && r == void.class && nbtSetInteger == null) {
+                    nbtSetInteger = m; System.out.println("DEBUG: [TSSPC] MCH setInteger=" + m.getName());
+                } else if (p.length == 1 && p[0] == String.class && r == int.class && nbtGetInteger == null) {
+                    nbtGetInteger = m; System.out.println("DEBUG: [TSSPC] MCH getInteger=" + m.getName());
+                } else if (p.length == 2 && p[0] == String.class && p[1] == String.class && r == void.class && nbtSetString == null) {
+                    nbtSetString = m; System.out.println("DEBUG: [TSSPC] MCH setString=" + m.getName());
+                } else if (p.length == 1 && p[0] == String.class && r == String.class && nbtGetString == null) {
+                    nbtGetString = m; System.out.println("DEBUG: [TSSPC] MCH getString=" + m.getName());
+                } else if (p.length == 1 && p[0] == String.class && r == boolean.class && nbtHasKey == null) {
+                    nbtHasKey = m; System.out.println("DEBUG: [TSSPC] MCH hasKey=" + m.getName());
+                }
+            }
+        } catch (Throwable t) { System.out.println("DEBUG: [TSSPC] MCH NBT scalar err: " + t); }
+
+        // --- InventoryPlayer.getItemStack() → ItemStack  /  setItemStack(ItemStack) → void ---
+        try {
+            for (Method m : InventoryPlayer.class.getMethods()) {
+                try { m.setAccessible(true); } catch (Throwable ig) {}
+                Class<?>[] p = m.getParameterTypes();
+                Class<?> r = m.getReturnType();
+                if (p.length == 0 && r == cStack && invGetItemStack == null) {
+                    invGetItemStack = m; System.out.println("DEBUG: [TSSPC] MCH invGetItemStack=" + m.getName());
+                } else if (p.length == 1 && p[0] == cStack && r == void.class && invSetItemStack == null) {
+                    invSetItemStack = m; System.out.println("DEBUG: [TSSPC] MCH invSetItemStack=" + m.getName());
+                }
+            }
+        } catch (Throwable t) { System.out.println("DEBUG: [TSSPC] MCH InventoryPlayer err: " + t); }
+
         // --- ItemStack.copy() → ItemStack ---
         try {
             for (Method m : cStack.getMethods()) {
@@ -179,6 +226,48 @@ public final class MCHelper {
     }
 
     // ==================== public API ====================
+
+    public static void nbtSetInteger(NBTTagCompound nbt, String key, int val) {
+        if (nbt == null) return;
+        if (nbtSetInteger != null) try { nbtSetInteger.invoke(nbt, key, val); return; } catch (Throwable t) {}
+        try { nbt.setInteger(key, val); } catch (Throwable ignored) {}
+    }
+
+    public static int nbtGetInteger(NBTTagCompound nbt, String key) {
+        if (nbt == null) return 0;
+        if (nbtGetInteger != null) try { return (Integer) nbtGetInteger.invoke(nbt, key); } catch (Throwable t) {}
+        try { return nbt.getInteger(key); } catch (Throwable ignored) { return 0; }
+    }
+
+    public static void nbtSetString(NBTTagCompound nbt, String key, String val) {
+        if (nbt == null) return;
+        if (nbtSetString != null) try { nbtSetString.invoke(nbt, key, val); return; } catch (Throwable t) {}
+        try { nbt.setString(key, val); } catch (Throwable ignored) {}
+    }
+
+    public static String nbtGetString(NBTTagCompound nbt, String key) {
+        if (nbt == null) return "";
+        if (nbtGetString != null) try { return (String) nbtGetString.invoke(nbt, key); } catch (Throwable t) {}
+        try { return nbt.getString(key); } catch (Throwable ignored) { return ""; }
+    }
+
+    public static boolean nbtHasKey(NBTTagCompound nbt, String key) {
+        if (nbt == null) return false;
+        if (nbtHasKey != null) try { return (Boolean) nbtHasKey.invoke(nbt, key); } catch (Throwable t) {}
+        try { return nbt.hasKey(key); } catch (Throwable ignored) { return false; }
+    }
+
+    public static ItemStack invGetItemStack(InventoryPlayer inv) {
+        if (inv == null) return null;
+        if (invGetItemStack != null) try { return (ItemStack) invGetItemStack.invoke(inv); } catch (Throwable t) {}
+        try { return inv.getItemStack(); } catch (Throwable ignored) { return null; }
+    }
+
+    public static void invSetItemStack(InventoryPlayer inv, ItemStack stack) {
+        if (inv == null) return;
+        if (invSetItemStack != null) try { invSetItemStack.invoke(inv, stack); return; } catch (Throwable t) {}
+        try { inv.setItemStack(stack); } catch (Throwable ignored) {}
+    }
 
     public static void nbtSetTag(NBTTagCompound nbt, String key, NBTBase val) {
         if (nbtSetTag != null) try { nbtSetTag.invoke(nbt, key, val); return; }
