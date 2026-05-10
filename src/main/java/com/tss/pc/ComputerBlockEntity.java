@@ -46,6 +46,12 @@ public class ComputerBlockEntity extends TileEntity {
     private static java.lang.reflect.Method nbtAppendTagMethod;
     private static java.lang.reflect.Method nbtTagAtMethod;
     private static java.lang.reflect.Method nbtTagCountMethod;
+    // NBTTagCompound スカラーメソッド (SRG名のためリフレクション)
+    private static java.lang.reflect.Method nbtSetStringMethod;
+    private static java.lang.reflect.Method nbtGetStringMethod;
+    private static java.lang.reflect.Method nbtSetByteMethod;
+    private static java.lang.reflect.Method nbtGetByteMethod;
+    private static java.lang.reflect.Method nbtHasKeyMethod;
     static {
         Class<?> cNbtCompound = net.minecraft.nbt.NBTTagCompound.class;
         Class<?> cNbtList = net.minecraft.nbt.NBTTagList.class;
@@ -104,6 +110,24 @@ public class ComputerBlockEntity extends TileEntity {
                 }
             }
         } catch (Exception e) { System.out.println("DEBUG: [TSSPC] tagCount err: " + e); }
+        // NBTTagCompound スカラーメソッドを発見する
+        try {
+            for (java.lang.reflect.Method m : cNbtCompound.getDeclaredMethods()) {
+                try { m.setAccessible(true); } catch (Throwable ig) {}
+                Class<?>[] p = m.getParameterTypes();
+                Class<?> r = m.getReturnType();
+                if (p.length == 2 && p[0] == String.class && p[1] == String.class && r == void.class && nbtSetStringMethod == null)
+                    { nbtSetStringMethod = m; System.out.println("DEBUG: [TSSPC] NBT setString = " + m.getName()); }
+                else if (p.length == 1 && p[0] == String.class && r == String.class && nbtGetStringMethod == null)
+                    { nbtGetStringMethod = m; System.out.println("DEBUG: [TSSPC] NBT getString = " + m.getName()); }
+                else if (p.length == 2 && p[0] == String.class && p[1] == byte.class && r == void.class && nbtSetByteMethod == null)
+                    { nbtSetByteMethod = m; System.out.println("DEBUG: [TSSPC] NBT setByte = " + m.getName()); }
+                else if (p.length == 1 && p[0] == String.class && r == byte.class && nbtGetByteMethod == null)
+                    { nbtGetByteMethod = m; System.out.println("DEBUG: [TSSPC] NBT getByte = " + m.getName()); }
+                else if (p.length == 1 && p[0] == String.class && r == boolean.class && nbtHasKeyMethod == null)
+                    { nbtHasKeyMethod = m; System.out.println("DEBUG: [TSSPC] NBT hasKey = " + m.getName()); }
+            }
+        } catch (Throwable t) { System.out.println("DEBUG: [TSSPC] NBT scalar err: " + t); }
     }
     private static void nbtSetTag(NBTTagCompound nbt, String key, net.minecraft.nbt.NBTBase val) {
         if (nbtSetTagMethod != null) try { nbtSetTagMethod.invoke(nbt, key, val); } catch (Exception e) { System.out.println("DEBUG: [TSSPC] nbtSetTag err: " + e); }
@@ -126,6 +150,27 @@ public class ComputerBlockEntity extends TileEntity {
     private static int nbtTagCount(NBTTagList list) {
         if (nbtTagCountMethod != null) try { return (Integer) nbtTagCountMethod.invoke(list); } catch (Exception e) { System.out.println("DEBUG: [TSSPC] nbtTagCount err: " + e); }
         return 0;
+    }
+    // NBTTagCompound スカラープロキシ (catch Throwable で NoSuchMethodError も捕捉)
+    private static void nbtSetStr(NBTTagCompound nbt, String key, String val) {
+        if (nbtSetStringMethod != null) try { nbtSetStringMethod.invoke(nbt, key, val); return; } catch (Throwable ig) {}
+        try { nbt.setString(key, val); } catch (Throwable ignored) {}
+    }
+    private static String nbtGetStr(NBTTagCompound nbt, String key) {
+        if (nbtGetStringMethod != null) try { return (String) nbtGetStringMethod.invoke(nbt, key); } catch (Throwable ig) {}
+        try { return nbt.getString(key); } catch (Throwable ignored) { return ""; }
+    }
+    private static void nbtSetByt(NBTTagCompound nbt, String key, byte val) {
+        if (nbtSetByteMethod != null) try { nbtSetByteMethod.invoke(nbt, key, val); return; } catch (Throwable ig) {}
+        try { nbt.setByte(key, val); } catch (Throwable ignored) {}
+    }
+    private static byte nbtGetByt(NBTTagCompound nbt, String key) {
+        if (nbtGetByteMethod != null) try { return (Byte) nbtGetByteMethod.invoke(nbt, key); } catch (Throwable ig) {}
+        try { return nbt.getByte(key); } catch (Throwable ignored) { return 0; }
+    }
+    private static boolean nbtHasKey(NBTTagCompound nbt, String key) {
+        if (nbtHasKeyMethod != null) try { return (Boolean) nbtHasKeyMethod.invoke(nbt, key); } catch (Throwable ig) {}
+        try { return nbt.hasKey(key); } catch (Throwable ignored) { return false; }
     }
 
     // --- クリック管理用変数 ---
@@ -262,16 +307,16 @@ public class ComputerBlockEntity extends TileEntity {
         for (int i = 0; i < nbtTagCount(playersList); i++) {
             NBTTagCompound playerTag = (NBTTagCompound) nbtTagAt(playersList, i);
             if (playerTag == null) continue;
-            String playerName = playerTag.getString("PlayerName");
+            String playerName = nbtGetStr(playerTag, "PlayerName");
 
             List<FavoriteTab> tabs = new ArrayList<FavoriteTab>();
             NBTTagList tabList = nbtGetTagList(playerTag, "Tabs");
             for (int j = 0; j < nbtTagCount(tabList); j++) {
                 NBTTagCompound tabTag = (NBTTagCompound) nbtTagAt(tabList, j);
                 if (tabTag == null) continue;
-                FavoriteTab tab = new FavoriteTab(tabTag.getString("TabName"));
+                FavoriteTab tab = new FavoriteTab(nbtGetStr(tabTag, "TabName"));
 
-                if (tabTag.hasKey("Icon")) {
+                if (nbtHasKey(tabTag, "Icon")) {
                     tab.icon = MCHelper.itemLoadFromNBT(nbtGetCompoundTag(tabTag, "Icon"));
                 }
 
@@ -280,7 +325,7 @@ public class ComputerBlockEntity extends TileEntity {
                 for (int k = 0; k < nbtTagCount(slotList); k++) {
                     NBTTagCompound slotTag = (NBTTagCompound) nbtTagAt(slotList, k);
                     if (slotTag == null) continue;
-                    int slotIdx = slotTag.getByte("Slot");
+                    int slotIdx = nbtGetByt(slotTag, "Slot");
                     if (slotIdx >= 0 && slotIdx < tab.slots.size()) {
                         tab.slots.set(slotIdx, MCHelper.itemLoadFromNBT(slotTag));
                     }
@@ -298,12 +343,12 @@ public class ComputerBlockEntity extends TileEntity {
         NBTTagList playersList = new NBTTagList();
         for (Map.Entry<String, List<FavoriteTab>> entry : playerTabs.entrySet()) {
             NBTTagCompound playerTag = new NBTTagCompound();
-            playerTag.setString("PlayerName", entry.getKey());
+            nbtSetStr(playerTag, "PlayerName", entry.getKey());
 
             NBTTagList tabList = new NBTTagList();
             for (FavoriteTab tab : entry.getValue()) {
                 NBTTagCompound tabTag = new NBTTagCompound();
-                tabTag.setString("TabName", tab.name);
+                nbtSetStr(tabTag, "TabName", tab.name);
 
                 // アイコンの保存
                 if (tab.icon != null) {
@@ -318,7 +363,7 @@ public class ComputerBlockEntity extends TileEntity {
                     ItemStack stack = tab.slots.get(i);
                     if (stack != null) {
                         NBTTagCompound slotTag = new NBTTagCompound();
-                        slotTag.setByte("Slot", (byte) i);
+                        nbtSetByt(slotTag, "Slot", (byte) i);
                         MCHelper.itemWriteToNBT(stack, slotTag);
                         nbtAppendTag(slotList, slotTag);
                     }
@@ -354,10 +399,38 @@ public class ComputerBlockEntity extends TileEntity {
     // 🌟 クライアント側専用の更新メソッドを分ける
     @SideOnly(Side.CLIENT)
     private void updateGuiClient() {
-        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
-        if (mc.thePlayer != null && mc.thePlayer.field_71069_bj instanceof ComputerContainer) {
-            ((ComputerContainer)mc.thePlayer.field_71069_bj).updateVisibleSlots();
-        }
+        // Minecraft.getMinecraft() はSRG名のためリフレクションで取得
+        net.minecraft.client.Minecraft mc = null;
+        try {
+            for (java.lang.reflect.Field f : net.minecraft.client.Minecraft.class.getDeclaredFields()) {
+                f.setAccessible(true);
+                if (java.lang.reflect.Modifier.isStatic(f.getModifiers())
+                        && f.getType() == net.minecraft.client.Minecraft.class) {
+                    Object v = f.get(null);
+                    if (v != null) { mc = (net.minecraft.client.Minecraft) v; break; }
+                }
+            }
+        } catch (Throwable ignored) {}
+        if (mc == null) return;
+        try {
+            // mc.thePlayer と field_71069_bj (openContainer) もSRG名のためリフレクションで取得
+            Object player = null;
+            for (java.lang.reflect.Field f : mc.getClass().getFields()) {
+                if (f.getType().getSimpleName().contains("EntityClientPlayerMP")) {
+                    f.setAccessible(true); player = f.get(mc); break;
+                }
+            }
+            if (player == null) return;
+            Object container = null;
+            for (java.lang.reflect.Field f : player.getClass().getFields()) {
+                if (f.getType().getSimpleName().contains("Container")) {
+                    f.setAccessible(true); container = f.get(player); break;
+                }
+            }
+            if (container instanceof ComputerContainer) {
+                ((ComputerContainer) container).updateVisibleSlots();
+            }
+        } catch (Throwable ignored) {}
     }
     // 🌟 Containerからタブ一覧を取得するためのメソッドを追加
     public List<FavoriteTab> getTabs() {
