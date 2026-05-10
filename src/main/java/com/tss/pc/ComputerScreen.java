@@ -164,33 +164,46 @@ public class ComputerScreen extends GuiContainer {
         } catch (Exception ignored) {}
 
         // GuiTextField メソッド (SRG名のため全てリフレクション)
+        // getDeclaredMethods() はスーパークラスを含まないため、クラス階層を全てウォークする
         try {
             java.util.List<java.lang.reflect.Method> gtfBoolVoid = new java.util.ArrayList<>();
             java.util.List<java.lang.reflect.Method> gtfStrVoid  = new java.util.ArrayList<>();
-            for (java.lang.reflect.Method m : net.minecraft.client.gui.GuiTextField.class.getDeclaredMethods()) {
-                try { m.setAccessible(true); } catch (Exception ig) {}
-                Class<?>[] p = m.getParameterTypes();
-                Class<?> r = m.getReturnType();
-                if (p.length == 1 && p[0] == boolean.class && r == void.class) {
-                    gtfBoolVoid.add(m);
-                } else if (p.length == 1 && p[0] == String.class && r == void.class) {
-                    gtfStrVoid.add(m);
-                } else if (p.length == 0 && r == String.class) {
-                    _gtfGetText = m;
-                } else if (p.length == 0 && r == boolean.class) {
-                    _gtfIsFocused = m;
-                } else if (p.length == 0 && r == void.class && _gtfDrawTextBox == null) {
-                    _gtfDrawTextBox = m;
-                } else if (p.length == 3 && p[0] == int.class && p[1] == int.class && p[2] == int.class && r == void.class) {
-                    _gtfMouseClicked = m;
-                } else if (p.length == 2 && p[0] == char.class && p[1] == int.class && r == boolean.class) {
-                    _gtfTextboxKeyTyped = m;
+            Class<?> gtfCls = net.minecraft.client.gui.GuiTextField.class;
+            while (gtfCls != null && gtfCls != Object.class) {
+                for (java.lang.reflect.Method m : gtfCls.getDeclaredMethods()) {
+                    try { m.setAccessible(true); } catch (Throwable ig) {}
+                    Class<?>[] p = m.getParameterTypes();
+                    Class<?> r = m.getReturnType();
+                    System.out.println("DEBUG GTF: " + m.getName() + " p=" + p.length + " r=" + r.getSimpleName());
+                    if (p.length == 1 && p[0] == boolean.class && r == void.class) {
+                        gtfBoolVoid.add(m);
+                    } else if (p.length == 1 && p[0] == String.class && r == void.class) {
+                        gtfStrVoid.add(m);
+                    } else if (p.length == 0 && r == String.class && _gtfGetText == null) {
+                        _gtfGetText = m;
+                    } else if (p.length == 0 && r == boolean.class && _gtfIsFocused == null) {
+                        _gtfIsFocused = m;
+                    } else if (p.length == 0 && r == void.class && _gtfDrawTextBox == null) {
+                        _gtfDrawTextBox = m;
+                    } else if (p.length == 3 && p[0] == int.class && p[1] == int.class && p[2] == int.class
+                            && r == void.class && _gtfMouseClicked == null) {
+                        _gtfMouseClicked = m;
+                    } else if (p.length == 2 && p[0] == char.class && p[1] == int.class
+                            && r == boolean.class && _gtfTextboxKeyTyped == null) {
+                        _gtfTextboxKeyTyped = m;
+                    }
                 }
+                gtfCls = gtfCls.getSuperclass();
             }
             if (gtfBoolVoid.size() >= 1) _gtfSetFocused      = gtfBoolVoid.get(0);
             if (gtfBoolVoid.size() >= 2) _gtfSetCanLoseFocus = gtfBoolVoid.get(1);
             if (gtfStrVoid.size()  >= 1) _gtfSetText         = gtfStrVoid.get(0);
-        } catch (Exception ignored) {}
+            System.out.println("DEBUG GTF result: clicked=" + _gtfMouseClicked
+                + " draw=" + _gtfDrawTextBox + " focused=" + _gtfIsFocused
+                + " getText=" + _gtfGetText + " keyTyped=" + _gtfTextboxKeyTyped);
+        } catch (Throwable t) {
+            System.out.println("DEBUG GTF reflection error: " + t);
+        }
 
         // FontRenderer メソッド (SRG名のためリフレクション)
         try {
@@ -1010,54 +1023,56 @@ public class ComputerScreen extends GuiContainer {
 
     private static boolean nbtHasKey(net.minecraft.nbt.NBTTagCompound tag, String key) {
         if (tag == null) return false;
-        if (_nbtHasKey != null) try { return (Boolean) _nbtHasKey.invoke(tag, key); } catch (Exception ig) {}
-        try { return tag.hasKey(key); } catch (Exception ignored) { return false; }
+        if (_nbtHasKey != null) try { return (Boolean) _nbtHasKey.invoke(tag, key); } catch (Throwable ig) {}
+        try { return tag.hasKey(key); } catch (Throwable ignored) { return false; }
     }
     private static int nbtGetInt(net.minecraft.nbt.NBTTagCompound tag, String key) {
         if (tag == null) return 0;
-        if (_nbtGetInteger != null) try { return (Integer) _nbtGetInteger.invoke(tag, key); } catch (Exception ig) {}
-        try { return tag.getInteger(key); } catch (Exception ignored) { return 0; }
+        if (_nbtGetInteger != null) try { return (Integer) _nbtGetInteger.invoke(tag, key); } catch (Throwable ig) {}
+        try { return tag.getInteger(key); } catch (Throwable ignored) { return 0; }
     }
 
     // -------------------------------------------------------------------------
-    // GuiTextField プロキシ (SRG名のため直接呼び出せないメソッドをリフレクション経由で呼ぶ)
+    // GuiTextField プロキシ
+    // フォールバックは catch(Throwable) で保護 — NoSuchMethodError は Error なので
+    // catch(Exception) では捕捉できずクラッシュするため必ず Throwable を使う
     // -------------------------------------------------------------------------
 
     private static void gtfSetFocused(GuiTextField f, boolean v) {
-        if (_gtfSetFocused != null) try { _gtfSetFocused.invoke(f, v); return; } catch (Exception ig) {}
-        try { f.setFocused(v); } catch (Exception ignored) {}
+        if (_gtfSetFocused != null) try { _gtfSetFocused.invoke(f, v); return; } catch (Throwable ig) {}
+        try { f.setFocused(v); } catch (Throwable ignored) {}
     }
     private static void gtfSetCanLoseFocus(GuiTextField f, boolean v) {
-        if (_gtfSetCanLoseFocus != null) try { _gtfSetCanLoseFocus.invoke(f, v); return; } catch (Exception ig) {}
-        try { f.setCanLoseFocus(v); } catch (Exception ignored) {}
+        if (_gtfSetCanLoseFocus != null) try { _gtfSetCanLoseFocus.invoke(f, v); return; } catch (Throwable ig) {}
+        try { f.setCanLoseFocus(v); } catch (Throwable ignored) {}
     }
     private static void gtfSetText(GuiTextField f, String s) {
-        if (_gtfSetText != null) try { _gtfSetText.invoke(f, s); return; } catch (Exception ig) {}
-        try { f.setText(s); } catch (Exception ignored) {}
+        if (_gtfSetText != null) try { _gtfSetText.invoke(f, s); return; } catch (Throwable ig) {}
+        try { f.setText(s); } catch (Throwable ignored) {}
     }
     private static String gtfGetText(GuiTextField f) {
-        if (_gtfGetText != null) try { return (String) _gtfGetText.invoke(f); } catch (Exception ig) {}
-        try { return f.getText(); } catch (Exception ignored) { return ""; }
+        if (_gtfGetText != null) try { return (String) _gtfGetText.invoke(f); } catch (Throwable ig) {}
+        try { return f.getText(); } catch (Throwable ignored) { return ""; }
     }
     private static boolean gtfIsFocused(GuiTextField f) {
-        if (_gtfIsFocused != null) try { return (Boolean) _gtfIsFocused.invoke(f); } catch (Exception ig) {}
-        try { return f.isFocused(); } catch (Exception ignored) { return false; }
+        if (_gtfIsFocused != null) try { return (Boolean) _gtfIsFocused.invoke(f); } catch (Throwable ig) {}
+        try { return f.isFocused(); } catch (Throwable ignored) { return false; }
     }
     private static void gtfDrawTextBox(GuiTextField f) {
-        if (_gtfDrawTextBox != null) try { _gtfDrawTextBox.invoke(f); return; } catch (Exception ig) {}
-        try { f.drawTextBox(); } catch (Exception ignored) {}
+        if (_gtfDrawTextBox != null) try { _gtfDrawTextBox.invoke(f); return; } catch (Throwable ig) {}
+        try { f.drawTextBox(); } catch (Throwable ignored) {}
     }
     private static void gtfMouseClicked(GuiTextField f, int x, int y, int btn) {
-        if (_gtfMouseClicked != null) try { _gtfMouseClicked.invoke(f, x, y, btn); return; } catch (Exception ig) {}
-        try { f.mouseClicked(x, y, btn); } catch (Exception ignored) {}
+        if (_gtfMouseClicked != null) try { _gtfMouseClicked.invoke(f, x, y, btn); return; } catch (Throwable ig) {}
+        try { f.mouseClicked(x, y, btn); } catch (Throwable ignored) {}
     }
     private static boolean gtfTextboxKeyTyped(GuiTextField f, char c, int key) {
-        if (_gtfTextboxKeyTyped != null) try { return (Boolean) _gtfTextboxKeyTyped.invoke(f, c, key); } catch (Exception ig) {}
-        try { return f.textboxKeyTyped(c, key); } catch (Exception ignored) { return false; }
+        if (_gtfTextboxKeyTyped != null) try { return (Boolean) _gtfTextboxKeyTyped.invoke(f, c, key); } catch (Throwable ig) {}
+        try { return f.textboxKeyTyped(c, key); } catch (Throwable ignored) { return false; }
     }
 
     // -------------------------------------------------------------------------
-    // FontRenderer プロキシ (SRG名のため直接呼び出せないメソッドをリフレクション経由で呼ぶ)
+    // FontRenderer プロキシ (catch Throwable で Error も捕捉)
     // -------------------------------------------------------------------------
 
     private static int frDrawStr(net.minecraft.client.gui.FontRenderer fr, String s, int x, int y, int color) {
@@ -1065,24 +1080,24 @@ public class ComputerScreen extends GuiContainer {
         if (_frDrawString != null) try {
             Object r = _frDrawString.invoke(fr, s, x, y, color);
             return r instanceof Integer ? (Integer) r : 0;
-        } catch (Exception ig) {}
-        try { return fr.drawString(s, x, y, color); } catch (Exception ignored) { return 0; }
+        } catch (Throwable ig) {}
+        try { return fr.drawString(s, x, y, color); } catch (Throwable ignored) { return 0; }
     }
     private static int frDrawStrShadow(net.minecraft.client.gui.FontRenderer fr, String s, int x, int y, int color) {
         if (fr == null) return 0;
         if (_frDrawStringShadow != null) try {
             Object r = _frDrawStringShadow.invoke(fr, s, x, y, color);
             return r instanceof Integer ? (Integer) r : 0;
-        } catch (Exception ig) {}
-        try { return fr.drawStringWithShadow(s, x, y, color); } catch (Exception ignored) { return 0; }
+        } catch (Throwable ig) {}
+        try { return fr.drawStringWithShadow(s, x, y, color); } catch (Throwable ignored) { return 0; }
     }
     private static int frGetStrWidth(net.minecraft.client.gui.FontRenderer fr, String s) {
         if (fr == null) return 0;
         if (_frGetStringWidth != null) try {
             Object r = _frGetStringWidth.invoke(fr, s);
             return r instanceof Integer ? (Integer) r : 0;
-        } catch (Exception ig) {}
-        try { return fr.getStringWidth(s); } catch (Exception ignored) { return 0; }
+        } catch (Throwable ig) {}
+        try { return fr.getStringWidth(s); } catch (Throwable ignored) { return 0; }
     }
 
     // -------------------------------------------------------------------------
@@ -1091,8 +1106,8 @@ public class ComputerScreen extends GuiContainer {
 
     private static void reBind(net.minecraft.client.renderer.texture.RenderEngine re, String path) {
         if (re == null) return;
-        if (_reBind != null) try { _reBind.invoke(re, path); return; } catch (Exception ig) {}
-        try { re.bindTexture(path); } catch (Exception ignored) {}
+        if (_reBind != null) try { _reBind.invoke(re, path); return; } catch (Throwable ig) {}
+        try { re.bindTexture(path); } catch (Throwable ignored) {}
     }
 
     private static void riRenderItem(
@@ -1101,8 +1116,8 @@ public class ComputerScreen extends GuiContainer {
             net.minecraft.client.renderer.texture.RenderEngine re,
             net.minecraft.item.ItemStack is, int x, int y) {
         if (ri == null || is == null) return;
-        if (_riRenderItem != null) try { _riRenderItem.invoke(ri, fr, re, is, x, y); return; } catch (Exception ig) {}
-        try { ri.renderItemAndEffectIntoGUI(fr, re, is, x, y); } catch (Exception ignored) {}
+        if (_riRenderItem != null) try { _riRenderItem.invoke(ri, fr, re, is, x, y); return; } catch (Throwable ig) {}
+        try { ri.renderItemAndEffectIntoGUI(fr, re, is, x, y); } catch (Throwable ignored) {}
     }
 
     // -------------------------------------------------------------------------
