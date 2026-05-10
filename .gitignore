@@ -4,6 +4,7 @@ build/mod/
 build/classes/
 build/tmp/
 build/reports/
+build/libs/
 *.class
 
 # Gradle cache
