@@ -92,20 +92,26 @@ public class ComputerScreen extends GuiContainer {
         if (gsInts.size() >= 1) _gsW = gsInts.get(0);
         if (gsInts.size() >= 2) _gsH = gsInts.get(1);
 
-        // GuiScreen.drawRect: static メソッド (int,int,int,int,int)→void を取得
-        // Minecraftの本物のdrawRect (Tessellatorベース) をリフレクション経由で呼ぶことで
-        // GL11直接描画のGL状態問題を回避する
-        for (java.lang.reflect.Method m : net.minecraft.client.gui.GuiScreen.class.getDeclaredMethods()) {
-            try { m.setAccessible(true); } catch (Throwable ig) {}
-            Class<?>[] p = m.getParameterTypes();
-            if (p.length == 5
-                    && java.lang.reflect.Modifier.isStatic(m.getModifiers())
-                    && p[0] == int.class && p[1] == int.class && p[2] == int.class
-                    && p[3] == int.class && p[4] == int.class
-                    && m.getReturnType() == void.class
-                    && _gsDrawRect == null) {
-                _gsDrawRect = m;
-                System.out.println("DEBUG: Found GuiScreen.drawRect: " + m.getName());
+        // drawRect は GuiScreen の親クラス Gui に定義されている。
+        // getDeclaredMethods() はスーパークラスを含まないため、クラス階層をウォークして探す。
+        {
+            Class<?> cls = net.minecraft.client.gui.GuiScreen.class;
+            outer:
+            while (cls != null && cls != Object.class) {
+                for (java.lang.reflect.Method m : cls.getDeclaredMethods()) {
+                    try { m.setAccessible(true); } catch (Throwable ig) {}
+                    Class<?>[] p = m.getParameterTypes();
+                    if (p.length == 5
+                            && java.lang.reflect.Modifier.isStatic(m.getModifiers())
+                            && p[0] == int.class && p[1] == int.class && p[2] == int.class
+                            && p[3] == int.class && p[4] == int.class
+                            && m.getReturnType() == void.class) {
+                        _gsDrawRect = m;
+                        System.out.println("DEBUG: Found drawRect in " + cls.getSimpleName() + ": " + m.getName());
+                        break outer;
+                    }
+                }
+                cls = cls.getSuperclass();
             }
         }
 
