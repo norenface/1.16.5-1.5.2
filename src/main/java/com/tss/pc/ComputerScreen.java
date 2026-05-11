@@ -79,6 +79,11 @@ public class ComputerScreen extends GuiContainer {
     private static java.lang.reflect.Method _nbtHasKey, _nbtGetInteger;
     // GuiScreen.drawRect (static, SRG名のためリフレクション) — GL11直接描画の代わりに使う
     private static java.lang.reflect.Method _gsDrawRect;
+    // Tessellator (SRG名のためリフレクション経由) — drawRectが見つからない場合のフォールバック
+    private static Object                   _tessInstance = null;
+    private static java.lang.reflect.Method _tessStart    = null; // startDrawing(int)
+    private static java.lang.reflect.Method _tessAddVert  = null; // addVertex(double,double,double)
+    private static java.lang.reflect.Method _tessDraw     = null; // draw() → int
 
     static {
         // GuiScreen: intフィールドの1番目=width, 2番目=height, FontRendererフィールド=fontRenderer
@@ -307,6 +312,41 @@ public class ComputerScreen extends GuiContainer {
                     _nbtGetInteger = m;
             }
         } catch (Exception ignored) {}
+
+        // Tessellator: drawRect が使えない場合の矩形描画フォールバック (SRG名のためリフレクション)
+        try {
+            Class<?> tessClass = Class.forName("net.minecraft.client.renderer.Tessellator");
+            for (java.lang.reflect.Field f : tessClass.getDeclaredFields()) {
+                try { f.setAccessible(true); } catch (Throwable ig) {}
+                if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) && f.getType() == tessClass) {
+                    try { _tessInstance = f.get(null); } catch (Throwable ig) {}
+                    if (_tessInstance != null) {
+                        System.out.println("[TSS_PC] Tessellator instance found via field: " + f.getName());
+                        break;
+                    }
+                }
+            }
+            for (java.lang.reflect.Method m : tessClass.getDeclaredMethods()) {
+                try { m.setAccessible(true); } catch (Throwable ig) {}
+                Class<?>[] p = m.getParameterTypes();
+                Class<?> r  = m.getReturnType();
+                // startDrawing(int) — GL_QUADS=7 を渡す
+                if (p.length == 1 && p[0] == int.class && r == void.class && _tessStart == null)
+                    _tessStart = m;
+                // addVertex(double, double, double)
+                if (p.length == 3 && p[0] == double.class && p[1] == double.class && p[2] == double.class && _tessAddVert == null)
+                    _tessAddVert = m;
+                // draw() → int
+                if (p.length == 0 && r == int.class && _tessDraw == null)
+                    _tessDraw = m;
+            }
+            System.out.println("[TSS_PC] Tessellator: start=" + _tessStart + " addVert=" + _tessAddVert + " draw=" + _tessDraw);
+        } catch (Throwable ig) {
+            System.out.println("[TSS_PC] Tessellator reflection failed: " + ig);
+        }
+
+        System.out.println("[TSS_PC] ComputerScreen static init done. drawRect=" + _gsDrawRect
+                + " gsW=" + _gsW + " gsH=" + _gsH + " gsFR=" + _gsFR);
     }
 
     private static int slotNum(net.minecraft.inventory.Slot s) {
@@ -391,7 +431,12 @@ public class ComputerScreen extends GuiContainer {
 
     @Override
     protected void func_74185_a(float partialTicks, int mouseX, int mouseY) {
-        if (this.searchBox == null) return;
+        if (this.searchBox == null) {
+            System.out.println("[TSS_PC] drawBackground: searchBox is null, skipping");
+            return;
+        }
+        syncGuiFields(); // 毎フレーム確実に同期
+        System.out.println("[TSS_PC] drawBackground: w=" + this.width + " h=" + this.height + " drawRect=" + (_gsDrawRect != null) + " tess=" + (_tessInstance != null));
         Object re = getRenderEngine();
         if (re != null) reBind(re, "/font/default.png");
         int left = (this.width - this.xSize) / 2;
@@ -801,7 +846,7 @@ public class ComputerScreen extends GuiContainer {
             if (slot != null) {
                 sendActionPacket(6, slotNum(slot));
             } else {
-                if (this.thePlayer.field_71071_by.getItemStack() != null) {
+                if (MCHelper.invGetItemStack(this.thePlayer.field_71071_by) != null) {
                     sendActionPacket(6, -999);
                 }
             }
@@ -1005,6 +1050,33 @@ public class ComputerScreen extends GuiContainer {
         if (mcInst != null) this.mc = mcInst;
         try { if (_gsW  != null) this.width  = _gsW.getInt(this); } catch (Exception ignored) {}
         try { if (_gsH  != null) this.height = _gsH.getInt(this); } catch (Exception ignored) {}
+        // width/heightが0ならScaledResolutionかDisplayから取得する
+        if (this.width <= 0 || this.height <= 0) {
+            try {
+                // ScaledResolution を使う (MCP名でgetScaledWidth/Heightを反射検索)
+                Class<?> srClass = Class.forName("net.minecraft.client.gui.ScaledResolution");
+                Object sr = null;
+                for (java.lang.reflect.Constructor<?> c : srClass.getConstructors()) {
+                    Class<?>[] cp = c.getParameterTypes();
+                    if (cp.length == 3) { sr = c.newInstance(mcInst, org.lwjgl.opengl.Display.getWidth(), org.lwjgl.opengl.Display.getHeight()); break; }
+                    if (cp.length == 1) { sr = c.newInstance(mcInst); break; }
+                }
+                if (sr != null) {
+                    for (java.lang.reflect.Method m : srClass.getMethods()) {
+                        Class<?>[] p = m.getParameterTypes();
+                        Class<?> r  = m.getReturnType();
+                        if (p.length == 0 && r == int.class) {
+                            int v = (Integer) m.invoke(sr);
+                            if (this.width  <= 0 && v > 0 && v < 10000) { this.width  = v; }
+                            else if (this.height <= 0 && v > 0 && v < 10000) { this.height = v; }
+                        }
+                    }
+                }
+            } catch (Throwable ig) {}
+            // 最終フォールバック: LWJGL Display ピクセルサイズ (スケール非考慮)
+            if (this.width  <= 0) try { this.width  = org.lwjgl.opengl.Display.getWidth();  } catch (Throwable ig) {}
+            if (this.height <= 0) try { this.height = org.lwjgl.opengl.Display.getHeight(); } catch (Throwable ig) {}
+        }
         try { if (_gsFR != null) this.fontRenderer = (net.minecraft.client.gui.FontRenderer) _gsFR.get(this); } catch (Exception ignored) {}
     }
 
@@ -1187,28 +1259,42 @@ public class ComputerScreen extends GuiContainer {
     // -------------------------------------------------------------------------
 
     private static void drawColoredRect(int x1, int y1, int x2, int y2, int color) {
-        // 第一優先: MinecraftのGuiScreen.drawRect (Tessellatorベース、SRG名をリフレクションで取得)
+        // 第一優先: Gui.drawRect (Tessellatorベース、SRG名をリフレクションで取得)
         if (_gsDrawRect != null) {
             try { _gsDrawRect.invoke(null, x1, y1, x2, y2, color); return; } catch (Throwable ig) {}
         }
-        // フォールバック: GL11即時描画
-        int alpha = (color >> 24) & 0xFF;
-        int red   = (color >> 16) & 0xFF;
-        int green = (color >>  8) & 0xFF;
-        int blue  = (color      ) & 0xFF;
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glColor4f(red / 255.0f, green / 255.0f, blue / 255.0f, alpha / 255.0f);
-        GL11.glBegin(GL11.GL_QUADS);
-        GL11.glVertex2f(x1, y2);
-        GL11.glVertex2f(x2, y2);
-        GL11.glVertex2f(x2, y1);
-        GL11.glVertex2f(x1, y1);
-        GL11.glEnd();
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+        // 第二優先: Tessellator経由 (SRG名のためリフレクションで取得)
+        float a = (float)((color >> 24) & 0xFF) / 255.0F;
+        float r = (float)((color >> 16) & 0xFF) / 255.0F;
+        float g = (float)((color >>  8) & 0xFF) / 255.0F;
+        float b = (float)((color      ) & 0xFF) / 255.0F;
+        try {
+            GL11.glEnable(GL11.GL_BLEND);
+            GL11.glDisable(GL11.GL_TEXTURE_2D);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glColor4f(r, g, b, a);
+            if (_tessStart != null && _tessAddVert != null && _tessDraw != null && _tessInstance != null) {
+                _tessStart.invoke(_tessInstance, 7); // GL_QUADS = 7
+                _tessAddVert.invoke(_tessInstance, (double)x1, (double)y2, 0.0D);
+                _tessAddVert.invoke(_tessInstance, (double)x2, (double)y2, 0.0D);
+                _tessAddVert.invoke(_tessInstance, (double)x2, (double)y1, 0.0D);
+                _tessAddVert.invoke(_tessInstance, (double)x1, (double)y1, 0.0D);
+                _tessDraw.invoke(_tessInstance);
+            } else {
+                // 最終フォールバック: GL11即時描画 (動作しない場合があるが最後の手段)
+                GL11.glBegin(GL11.GL_QUADS);
+                GL11.glVertex2f(x1, y2);
+                GL11.glVertex2f(x2, y2);
+                GL11.glVertex2f(x2, y1);
+                GL11.glVertex2f(x1, y1);
+                GL11.glEnd();
+            }
+            GL11.glDisable(GL11.GL_BLEND);
+            GL11.glEnable(GL11.GL_TEXTURE_2D);
+            GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+        } catch (Throwable ig) {
+            System.err.println("[TSS_PC] drawColoredRect failed: " + ig);
+        }
     }
 
     // -------------------------------------------------------------------------
