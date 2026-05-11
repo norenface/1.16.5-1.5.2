@@ -350,16 +350,33 @@ public class ComputerScreen extends GuiContainer {
     }
 
     private static int slotNum(net.minecraft.inventory.Slot s) {
-        try { if (_slotNumber != null) return _slotNumber.getInt(s); } catch (Exception e) {}
-        return s.slotNumber;
+        if (_slotNumber != null) try { return _slotNumber.getInt(s); } catch (Throwable e) {}
+        try { return s.slotNumber; } catch (Throwable e) {}
+        return 0;
     }
+    // スロットのX/Y座標: リフレクションが失敗した場合はインデックスから直接計算
+    // s.xDisplayPosition / s.yDisplayPosition はSRG名が違うためNoSuchFieldErrorになる
     private static int slotX(net.minecraft.inventory.Slot s) {
-        try { if (_slotX != null) return _slotX.getInt(s); } catch (Exception e) {}
-        return s.xDisplayPosition;
+        if (_slotX != null) try { return _slotX.getInt(s); } catch (Throwable e) {}
+        return computeSlotX(slotNum(s));
     }
     private static int slotY(net.minecraft.inventory.Slot s) {
-        try { if (_slotY != null) return _slotY.getInt(s); } catch (Exception e) {}
-        return s.yDisplayPosition;
+        if (_slotY != null) try { return _slotY.getInt(s); } catch (Throwable e) {}
+        return computeSlotY(slotNum(s));
+    }
+    // ComputerContainerのスロット配置に合わせてインデックスからX/Y座標を計算
+    // (Slot内部フィールドへのSRGアクセスを回避)
+    private static int computeSlotX(int i) {
+        if (i < 45)  return 8   + (i % 9) * 18;          // メインストレージ
+        if (i < 90)  return 192 + ((i - 45) % 5) * 18;   // お気に入り
+        if (i < 117) return 8   + ((i - 90) % 9) * 18;   // プレイヤーインベントリ
+        return 8 + (i - 117) * 18;                         // ホットバー
+    }
+    private static int computeSlotY(int i) {
+        if (i < 45)  return 26  + (i / 9) * 18;
+        if (i < 90)  return 26  + ((i - 45) / 5) * 18;
+        if (i < 117) return 140 + ((i - 90) / 9) * 18;
+        return 198;
     }
 
     // 1.5.2用のテクスチャ指定
