@@ -22,8 +22,8 @@ public class ComputerContainer extends Container {
 
     // ランタイムでのaddSlotToContainerメソッドを動的に検索する
     private static java.lang.reflect.Method containerAddSlot;
-    // Container.inventoryItemStacks (List<Slot>) のSRGフィールドをリフレクションで取得
-    private static java.lang.reflect.Field _containerSlotList;
+    // Slot.slotNumber フィールド (SRG名のため直接アクセス不可、リフレクションで設定)
+    private static java.lang.reflect.Field _slotNumberField;
     static {
         for (java.lang.reflect.Method m : net.minecraft.inventory.Container.class.getDeclaredMethods()) {
             Class<?>[] p = m.getParameterTypes();
@@ -31,6 +31,14 @@ public class ComputerContainer extends Container {
                 try { m.setAccessible(true); } catch (Exception e) {}
                 containerAddSlot = m;
                 System.out.println("DEBUG: Found addSlotToContainer: " + m.getName());
+                break;
+            }
+        }
+        // Slot の最初の int フィールドが slotNumber (SRG名)
+        for (java.lang.reflect.Field f : net.minecraft.inventory.Slot.class.getDeclaredFields()) {
+            if (f.getType() == int.class) {
+                try { f.setAccessible(true); } catch (Throwable ig) {}
+                _slotNumberField = f;
                 break;
             }
         }
@@ -42,15 +50,15 @@ public class ComputerContainer extends Container {
     }
 
     private void addSlot(Slot slot) {
-        // 独自リストで先にスロット番号を確定
-        slot.slotNumber = _ownSlots.size();
+        int idx = _ownSlots.size();
         _ownSlots.add(slot);
+        // slotNumber をリフレクション経由で設定 (SRG名のため直接 slot.slotNumber = idx は NG)
+        if (_slotNumberField != null) {
+            try { _slotNumberField.setInt(slot, idx); } catch (Throwable ig) {}
+        }
         // Container の内部リストにも登録（バニラ描画・クリック処理のため）
         if (containerAddSlot != null) {
-            try {
-                containerAddSlot.invoke(this, slot);
-                return;
-            } catch (Exception e) {
+            try { containerAddSlot.invoke(this, slot); return; } catch (Exception e) {
                 System.err.println("DEBUG: addSlot reflection failed: " + e.getMessage());
             }
         }
