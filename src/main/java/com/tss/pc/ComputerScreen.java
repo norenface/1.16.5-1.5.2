@@ -80,10 +80,18 @@ public class ComputerScreen extends GuiContainer {
     // GuiScreen.drawRect (static, SRG名のためリフレクション) — GL11直接描画の代わりに使う
     private static java.lang.reflect.Method _gsDrawRect;
     // Tessellator (SRG名のためリフレクション経由) — drawRectが見つからない場合のフォールバック
-    private static Object                   _tessInstance = null;
-    private static java.lang.reflect.Method _tessStart    = null; // startDrawing(int)
-    private static java.lang.reflect.Method _tessAddVert  = null; // addVertex(double,double,double)
-    private static java.lang.reflect.Method _tessDraw     = null; // draw() → int
+    private static Object                   _tessInstance   = null;
+    private static java.lang.reflect.Method _tessStart      = null; // startDrawing(int)
+    private static java.lang.reflect.Method _tessStartQuads = null; // startDrawingQuads() → void
+    private static java.lang.reflect.Method _tessAddVert    = null; // addVertex(double,double,double)
+    private static java.lang.reflect.Method _tessDraw       = null; // draw() → int
+
+    // ForgeModLoaderのLoggerに直接書き込む — System.out.printlnはFMLがキャプチャしないため
+    private static final java.util.logging.Logger FMLLOG =
+            java.util.logging.Logger.getLogger("ForgeModLoader");
+    // デバッグログ制御（ログ溢れ防止）
+    private static int     _dbgDrawCount    = 0;
+    private static boolean _dbgRectWarnDone = false; // drawColoredRect警告は初回のみ
 
     static {
         // GuiScreen: intフィールドの1番目=width, 2番目=height, FontRendererフィールド=fontRenderer
@@ -330,6 +338,9 @@ public class ComputerScreen extends GuiContainer {
                 try { m.setAccessible(true); } catch (Throwable ig) {}
                 Class<?>[] p = m.getParameterTypes();
                 Class<?> r  = m.getReturnType();
+                // startDrawingQuads() — パラメータなし void
+                if (p.length == 0 && r == void.class && _tessStartQuads == null)
+                    _tessStartQuads = m;
                 // startDrawing(int) — GL_QUADS=7 を渡す
                 if (p.length == 1 && p[0] == int.class && r == void.class && _tessStart == null)
                     _tessStart = m;
@@ -340,13 +351,17 @@ public class ComputerScreen extends GuiContainer {
                 if (p.length == 0 && r == int.class && _tessDraw == null)
                     _tessDraw = m;
             }
-            System.out.println("[TSS_PC] Tessellator: start=" + _tessStart + " addVert=" + _tessAddVert + " draw=" + _tessDraw);
+            FMLLOG.info("[TSS_PC] Tessellator: inst=" + (_tessInstance != null)
+                    + " startQuads=" + (_tessStartQuads != null)
+                    + " start=" + (_tessStart != null)
+                    + " addVert=" + (_tessAddVert != null)
+                    + " draw=" + (_tessDraw != null));
         } catch (Throwable ig) {
-            System.out.println("[TSS_PC] Tessellator reflection failed: " + ig);
+            FMLLOG.warning("[TSS_PC] Tessellator reflection failed: " + ig);
         }
 
-        System.out.println("[TSS_PC] ComputerScreen static init done. drawRect=" + _gsDrawRect
-                + " gsW=" + _gsW + " gsH=" + _gsH + " gsFR=" + _gsFR);
+        FMLLOG.info("[TSS_PC] ComputerScreen static init done. drawRect=" + (_gsDrawRect != null)
+                + " gsW=" + (_gsW != null) + " gsH=" + (_gsH != null) + " gsFR=" + (_gsFR != null));
     }
 
     private static int slotNum(net.minecraft.inventory.Slot s) {
@@ -430,8 +445,14 @@ public class ComputerScreen extends GuiContainer {
 
     @Override
     public void func_73866_w() {
+        _dbgDrawCount = 0;       // GUIを開くたびに3フレーム分のdrawログを再有効化
+        _dbgRectWarnDone = false; // 警告フラグもリセット
         syncGuiFields();
         super.func_73866_w();
+        syncGuiFields(); // super後にもう一度同期（MCがfontRendererを設定するのを確実に拾う）
+        FMLLOG.info("[TSS_PC] initGui: w=" + this.width + " h=" + this.height
+                + " fontRenderer=" + (this.fontRenderer != null)
+                + " _gsFR=" + (_gsFR != null));
         int left = (this.width - this.xSize) / 2;
         int top = (this.height - this.ySize) / 2;
 
@@ -449,11 +470,18 @@ public class ComputerScreen extends GuiContainer {
     @Override
     protected void func_74185_a(float partialTicks, int mouseX, int mouseY) {
         if (this.searchBox == null) {
-            System.out.println("[TSS_PC] drawBackground: searchBox is null, skipping");
+            FMLLOG.warning("[TSS_PC] drawBackground: searchBox is null, skipping draw");
             return;
         }
         syncGuiFields(); // 毎フレーム確実に同期
-        System.out.println("[TSS_PC] drawBackground: w=" + this.width + " h=" + this.height + " drawRect=" + (_gsDrawRect != null) + " tess=" + (_tessInstance != null));
+        if (_dbgDrawCount < 3) {
+            _dbgDrawCount++;
+            FMLLOG.info("[TSS_PC] drawBackground[" + _dbgDrawCount + "]: w=" + this.width + " h=" + this.height
+                    + " drawRect=" + (_gsDrawRect != null)
+                    + " tessInst=" + (_tessInstance != null)
+                    + " tessQuads=" + (_tessStartQuads != null)
+                    + " tessStart=" + (_tessStart != null));
+        }
         Object re = getRenderEngine();
         if (re != null) reBind(re, "/font/default.png");
         int left = (this.width - this.xSize) / 2;
@@ -1278,7 +1306,12 @@ public class ComputerScreen extends GuiContainer {
     private static void drawColoredRect(int x1, int y1, int x2, int y2, int color) {
         // 第一優先: Gui.drawRect (Tessellatorベース、SRG名をリフレクションで取得)
         if (_gsDrawRect != null) {
-            try { _gsDrawRect.invoke(null, x1, y1, x2, y2, color); return; } catch (Throwable ig) {}
+            try { _gsDrawRect.invoke(null, x1, y1, x2, y2, color); return; } catch (Throwable ig) {
+                if (!_dbgRectWarnDone) {
+                    _dbgRectWarnDone = true;
+                    FMLLOG.warning("[TSS_PC] Gui.drawRect invoke failed: " + ig.getClass().getSimpleName() + ": " + ig.getMessage());
+                }
+            }
         }
         // 第二優先: Tessellator経由 (SRG名のためリフレクションで取得)
         float a = (float)((color >> 24) & 0xFF) / 255.0F;
@@ -1290,27 +1323,42 @@ public class ComputerScreen extends GuiContainer {
             GL11.glDisable(GL11.GL_TEXTURE_2D);
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
             GL11.glColor4f(r, g, b, a);
-            if (_tessStart != null && _tessAddVert != null && _tessDraw != null && _tessInstance != null) {
-                _tessStart.invoke(_tessInstance, 7); // GL_QUADS = 7
-                _tessAddVert.invoke(_tessInstance, (double)x1, (double)y2, 0.0D);
+            if (_tessInstance != null && _tessAddVert != null && _tessDraw != null) {
+                // startDrawingQuads() を優先、なければ startDrawing(7)
+                if (_tessStartQuads != null) {
+                    _tessStartQuads.invoke(_tessInstance);
+                } else if (_tessStart != null) {
+                    _tessStart.invoke(_tessInstance, 7); // GL_QUADS = 7
+                } else {
+                    if (!_dbgRectWarnDone) { _dbgRectWarnDone = true; FMLLOG.warning("[TSS_PC] Tessellator: no start method found, falling back to GL11"); }
+                    GL11.glBegin(GL11.GL_QUADS);
+                    GL11.glVertex2f(x1, y2); GL11.glVertex2f(x2, y2);
+                    GL11.glVertex2f(x2, y1); GL11.glVertex2f(x1, y1);
+                    GL11.glEnd();
+                    GL11.glDisable(GL11.GL_BLEND);
+                    GL11.glEnable(GL11.GL_TEXTURE_2D);
+                    GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+                    return;
+                }
                 _tessAddVert.invoke(_tessInstance, (double)x2, (double)y2, 0.0D);
-                _tessAddVert.invoke(_tessInstance, (double)x2, (double)y1, 0.0D);
+                _tessAddVert.invoke(_tessInstance, (double)x1, (double)y2, 0.0D);
                 _tessAddVert.invoke(_tessInstance, (double)x1, (double)y1, 0.0D);
+                _tessAddVert.invoke(_tessInstance, (double)x2, (double)y1, 0.0D);
                 _tessDraw.invoke(_tessInstance);
             } else {
-                // 最終フォールバック: GL11即時描画 (動作しない場合があるが最後の手段)
+                if (!_dbgRectWarnDone) { _dbgRectWarnDone = true; FMLLOG.warning("[TSS_PC] Tessellator instance or methods null, using GL11 fallback"); }
                 GL11.glBegin(GL11.GL_QUADS);
-                GL11.glVertex2f(x1, y2);
-                GL11.glVertex2f(x2, y2);
-                GL11.glVertex2f(x2, y1);
-                GL11.glVertex2f(x1, y1);
+                GL11.glVertex2f(x1, y2); GL11.glVertex2f(x2, y2);
+                GL11.glVertex2f(x2, y1); GL11.glVertex2f(x1, y1);
                 GL11.glEnd();
             }
             GL11.glDisable(GL11.GL_BLEND);
             GL11.glEnable(GL11.GL_TEXTURE_2D);
             GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
         } catch (Throwable ig) {
-            System.err.println("[TSS_PC] drawColoredRect failed: " + ig);
+            if (!_dbgRectWarnDone) { _dbgRectWarnDone = true;
+                FMLLOG.warning("[TSS_PC] drawColoredRect Tessellator failed: " + ig.getClass().getSimpleName() + ": " + ig.getMessage());
+            }
         }
     }
 
