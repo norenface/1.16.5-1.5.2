@@ -448,9 +448,13 @@ public class ComputerScreen extends GuiContainer {
         _dbgDrawCount = 0;       // GUIを開くたびに3フレーム分のdrawログを再有効化
         _dbgRectWarnDone = false; // 警告フラグもリセット
         syncGuiFields();
-        super.func_73866_w();
+        // super.func_73866_w() は GuiContainer.initGui → MC内部処理。SRG名問題で例外を投げる
+        // 可能性があるため try-catch で保護する。失敗しても以降の初期化を続行する。
+        try { super.func_73866_w(); } catch (Throwable ig) {
+            FMLLOG.warning("[TSS_PC] super.func_73866_w() threw: " + ig.getClass().getSimpleName() + ": " + ig.getMessage());
+        }
         syncGuiFields(); // super後にもう一度同期（MCがfontRendererを設定するのを確実に拾う）
-        FMLLOG.info("[TSS_PC] initGui: w=" + this.width + " h=" + this.height
+        FMLLOG.warning("[TSS_PC] initGui: w=" + this.width + " h=" + this.height
                 + " fontRenderer=" + (this.fontRenderer != null)
                 + " _gsFR=" + (_gsFR != null));
         int left = (this.width - this.xSize) / 2;

@@ -16,6 +16,10 @@ public class ComputerContainer extends Container {
     private ComputerBlockEntity tileEntity;
     private final EntityPlayer player;
 
+    // Container の List<Slot> フィールドは SRG 名が不明なため、
+    // 独自リストで全スロットを管理してリフレクション依存を排除する
+    private final ArrayList<Slot> _ownSlots = new ArrayList<Slot>();
+
     // ランタイムでのaddSlotToContainerメソッドを動的に検索する
     private static java.lang.reflect.Method containerAddSlot;
     // Container.inventoryItemStacks (List<Slot>) のSRGフィールドをリフレクションで取得
@@ -30,25 +34,18 @@ public class ComputerContainer extends Container {
                 break;
             }
         }
-        for (java.lang.reflect.Field f : net.minecraft.inventory.Container.class.getDeclaredFields()) {
-            try {
-                f.setAccessible(true);
-                if (java.util.List.class.isAssignableFrom(f.getType())) {
-                    _containerSlotList = f;
-                    System.out.println("DEBUG: Found Container slot list: " + f.getName());
-                    break;
-                }
-            } catch (Exception ignored) {}
-        }
     }
 
-    /** Container のスロットリストをリフレクション経由で取得 (field_75151_b の SRG 名が違う場合の代替) */
-    public java.util.List getSlots() {
-        if (_containerSlotList != null) try { return (java.util.List) _containerSlotList.get(this); } catch (Exception ignored) {}
-        return this.field_75151_b;
+    /** 独自スロットリストを返す（SRG名問題を完全に回避） */
+    public List<Slot> getSlots() {
+        return _ownSlots;
     }
 
     private void addSlot(Slot slot) {
+        // 独自リストで先にスロット番号を確定
+        slot.slotNumber = _ownSlots.size();
+        _ownSlots.add(slot);
+        // Container の内部リストにも登録（バニラ描画・クリック処理のため）
         if (containerAddSlot != null) {
             try {
                 containerAddSlot.invoke(this, slot);
@@ -57,9 +54,8 @@ public class ComputerContainer extends Container {
                 System.err.println("DEBUG: addSlot reflection failed: " + e.getMessage());
             }
         }
-        // フォールバック：スロットリストに直接追加
-        java.util.List slots = getSlots();
-        if (slots != null) { slot.slotNumber = slots.size(); slots.add(slot); }
+        // addSlotToContainer が失敗した場合は field_75151_b に直接追加
+        try { this.field_75151_b.add(slot); } catch (Throwable ignored) {}
     }
 
     // スクロール・フィルタ状態 (Screenから更新される)
@@ -112,7 +108,7 @@ public class ComputerContainer extends Container {
         }
 
         // デバッグ用：スロットがいくつ登録されたかコンソールに出す
-        System.out.println("DEBUG: Container initialized. Total slots: " + this.field_75151_b.size());
+        System.out.println("DEBUG: Container initialized. Total slots: " + _ownSlots.size());
         // 最初の表示を更新
         updateVisibleSlots();
     }
@@ -197,13 +193,13 @@ public class ComputerContainer extends Container {
         String side = player.field_70170_p.field_72995_K ? "[CLIENT]" : "[SERVER]";
         System.out.println(side + " Click: SlotID=" + slotId + ", Button=" + button + ", Mod=" + modifier);
         // 範囲外ガード
-        if (slotId < 0 || slotId >= this.field_75151_b.size()) return null;
+        if (slotId < 0 || slotId >= _ownSlots.size()) return null;
 
         // --- 🌟 ストレージ表示スロット (0-44) ---
         if (slotId >= 0 && slotId < 45) {
             if (!player.field_70170_p.field_72995_K) {
                 // サーバー側
-                Slot slot = (Slot) this.field_75151_b.get(slotId);
+                Slot slot = _ownSlots.get(slotId);
                 if (slot != null && slot.func_75216_f()) {
                     System.out.println(side + " Processing Withdraw for: " + MCHelper.itemGetDisplayName(slot.func_75211_c()));
                     System.out.println(side + " Attempting Withdraw: Slot " + slotId);
@@ -334,7 +330,7 @@ public class ComputerContainer extends Container {
     }
 
     private void handleWithdraw(int slotId, int amount, EntityPlayer player) {
-        Slot slot = (Slot) this.field_75151_b.get(slotId);
+        Slot slot = _ownSlots.get(slotId);
         if (slot == null || !slot.func_75216_f()) return;
 
         ItemStack displayStack = slot.func_75211_c();
@@ -355,7 +351,7 @@ public class ComputerContainer extends Container {
 
 
     private void handleDeposit(int slotId, EntityPlayer player) {
-        Slot slot = (Slot) this.field_75151_b.get(slotId);
+        Slot slot = _ownSlots.get(slotId);
         if (slot == null || !slot.func_75216_f()) return;
 
         ItemStack stackToDeposit = slot.func_75211_c();
