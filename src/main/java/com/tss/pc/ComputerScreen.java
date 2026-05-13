@@ -530,30 +530,30 @@ public class ComputerScreen extends GuiContainer {
     }
     private void fixSuperXYSize() {
         ensureGCFields();
-        // インデックスベースで設定されたフィールドが正しいか値で検証する
-        // (実際に 176 を持つフィールドが xSize のはず)
-        if (_gcXSizeF != null) {
-            try { if (_gcXSizeF.getInt(this) != 176) _gcXSizeF = null; } catch (Throwable ig) { _gcXSizeF = null; }
+        // ローカル変数で検証 — 静的キャッシュは絶対にリセットしない（2回目呼び出し対策）
+        java.lang.reflect.Field xF = _gcXSizeF, yF = _gcYSizeF;
+        if (xF != null) {
+            try { if (xF.getInt(this) != 176) xF = null; } catch (Throwable ig) { xF = null; }
         }
-        if (_gcYSizeF != null) {
-            try { if (_gcYSizeF.getInt(this) != 166) _gcYSizeF = null; } catch (Throwable ig) { _gcYSizeF = null; }
+        if (yF != null) {
+            try { if (yF.getInt(this) != 166) yF = null; } catch (Throwable ig) { yF = null; }
         }
-        // 値マッチングで再検索
-        if (_gcXSizeF == null || _gcYSizeF == null) {
+        // 値マッチングで再検索 (初回のみ静的キャッシュを更新)
+        if (xF == null || yF == null) {
             for (java.lang.reflect.Field f : net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredFields()) {
                 if (f.getType() != int.class) continue;
                 try { f.setAccessible(true); } catch (Throwable ig) {}
                 try {
                     int v = f.getInt(this);
-                    if (v == 176 && _gcXSizeF == null) { _gcXSizeF = f; }
-                    else if (v == 166 && _gcYSizeF == null) { _gcYSizeF = f; }
+                    if (v == 176 && xF == null) { xF = f; if (_gcXSizeF == null) _gcXSizeF = f; }
+                    else if (v == 166 && yF == null) { yF = f; if (_gcYSizeF == null) _gcYSizeF = f; }
                 } catch (Throwable ig) {}
             }
         }
         boolean xOk = false, yOk = false;
-        try { if (_gcXSizeF != null) { _gcXSizeF.setInt(this, this.xSize); xOk = true; } } catch (Throwable ig) {}
-        try { if (_gcYSizeF != null) { _gcYSizeF.setInt(this, this.ySize); yOk = true; } } catch (Throwable ig) {}
-        FMLLOG.warning("[TSS_PC] fixSuperXYSize: xSize=" + (xOk ? "OK(" + (_gcXSizeF != null ? _gcXSizeF.getName() : "?") + ")" : "FAIL")
+        try { if (xF != null) { xF.setInt(this, this.xSize); xOk = true; } } catch (Throwable ig) {}
+        try { if (yF != null) { yF.setInt(this, this.ySize); yOk = true; } } catch (Throwable ig) {}
+        FMLLOG.warning("[TSS_PC] fixSuperXYSize: xSize=" + (xOk ? "OK(" + (xF != null ? xF.getName() : "?") + ")" : "FAIL")
                 + " ySize=" + (yOk ? "OK" : "FAIL"));
     }
     private void fixGuiLeftTop() {
@@ -563,44 +563,42 @@ public class ComputerScreen extends GuiContainer {
         ensureGCFields();
         int cL176 = (this.width  - 176) / 2;
         int cT166 = (this.height - 166) / 2;
-        // 既存フィールドが正しい値を持つか検証 (guiLeft は super.initGui が設定した値)
-        if (_gcLeftF != null) {
+        // ローカル変数で検証 — 静的キャッシュは絶対にリセットしない（2回目呼び出し対策）
+        java.lang.reflect.Field lF = _gcLeftF, tF = _gcTopF;
+        if (lF != null) {
             try {
-                int v = _gcLeftF.getInt(this);
-                if (v != cL176 && v != left) _gcLeftF = null;
-            } catch (Throwable ig) { _gcLeftF = null; }
+                int v = lF.getInt(this);
+                if (v != cL176 && v != left) lF = null;
+            } catch (Throwable ig) { lF = null; }
         }
-        if (_gcTopF != null) {
+        if (tF != null) {
             try {
-                int v = _gcTopF.getInt(this);
-                if (v != cT166 && v != top) _gcTopF = null;
-            } catch (Throwable ig) { _gcTopF = null; }
+                int v = tF.getInt(this);
+                if (v != cT166 && v != top) tF = null;
+            } catch (Throwable ig) { tF = null; }
         }
-        // 値マッチングで再検索
-        if (_gcLeftF == null || _gcTopF == null) {
+        // 値マッチングで再検索 (初回のみ静的キャッシュを更新)
+        if (lF == null || tF == null) {
             for (java.lang.reflect.Field f : net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredFields()) {
                 if (f.getType() != int.class || f == _gcXSizeF || f == _gcYSizeF) continue;
                 try { f.setAccessible(true); } catch (Throwable ig) {}
                 try {
                     int v = f.getInt(this);
-                    if (_gcLeftF == null && (v == cL176 || v == left))  { _gcLeftF = f; continue; }
-                    if (_gcTopF  == null && (v == cT166  || v == top))   { _gcTopF  = f; }
+                    if (lF == null && (v == cL176 || v == left))  { lF = f; if (_gcLeftF == null) _gcLeftF = f; continue; }
+                    if (tF == null && (v == cT166  || v == top))  { tF = f; if (_gcTopF  == null) _gcTopF  = f; }
                 } catch (Throwable ig) {}
             }
         }
         boolean lOk = false, tOk = false;
-        try { if (_gcLeftF != null) { _gcLeftF.setInt(this, left); lOk = true; } } catch (Throwable ig) {}
-        try { if (_gcTopF  != null) { _gcTopF.setInt(this, top);  tOk = true; } } catch (Throwable ig) {}
+        try { if (lF != null) { lF.setInt(this, left); lOk = true; } } catch (Throwable ig) {}
+        try { if (tF != null) { tF.setInt(this, top);  tOk = true; } } catch (Throwable ig) {}
         FMLLOG.warning("[TSS_PC] fixGuiLeftTop: left=" + left + " top=" + top + " w=" + this.width + " h=" + this.height
-                + " lOk=" + lOk + "(" + (_gcLeftF != null ? _gcLeftF.getName() : "?") + ")"
-                + " tOk=" + tOk + "(" + (_gcTopF  != null ? _gcTopF.getName()  : "?") + ")");
+                + " lOk=" + lOk + "(" + (lF != null ? lF.getName() : "?") + ")"
+                + " tOk=" + tOk + "(" + (tF != null ? tF.getName()  : "?") + ")");
     }
 
     private void lazyInit() {
         syncGuiFields();
-        // フォールバック時も guiLeft/guiTop が正しくない場合に備えて修正する
-        fixSuperXYSize();
-        fixGuiLeftTop();
         try {
             int left = (this.width - this.xSize) / 2;
             int top  = (this.height - this.ySize) / 2;
@@ -774,22 +772,9 @@ public class ComputerScreen extends GuiContainer {
         ComputerContainer container = this.container;
 
         // GuiContainer の guiLeft/guiTop を毎フレーム正しい値に強制設定する
-        // super.drawScreen() がこれらを使ってアイテムを描画するため、
-        // initGui での修正が不完全でも毎フレームここで確実に直す
+        // super.drawScreen() がこれらを使ってアイテムを描画するため確実に直す
         try { if (_gcLeftF != null) _gcLeftF.setInt(this, left); } catch (Throwable ig) {}
         try { if (_gcTopF  != null) _gcTopF.setInt(this, top);  } catch (Throwable ig) {}
-        // _gcLeftF/Top が null (発見失敗) の場合は値マッチングで動的検索して設定
-        if (_gcLeftF == null || _gcTopF == null) {
-            int wL = (this.width - 176) / 2, wT = (this.height - 166) / 2;
-            for (java.lang.reflect.Field f : net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredFields()) {
-                if (f.getType() != int.class) continue;
-                try {
-                    int v = f.getInt(this);
-                    if (_gcLeftF == null && (v == wL || v == left))  { _gcLeftF = f; f.setInt(this, left); }
-                    if (_gcTopF  == null && (v == wT  || v == top))  { _gcTopF  = f; f.setInt(this, top);  }
-                } catch (Throwable ig) {}
-            }
-        }
 
         if (isMouseDown) {
             if (mouseX >= left + 172 && mouseX <= left + 184 && mouseY >= top + 26 && mouseY <= top + 116) {
