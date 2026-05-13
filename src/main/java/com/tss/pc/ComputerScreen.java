@@ -410,6 +410,9 @@ public class ComputerScreen extends GuiContainer {
     private GuiTextField searchBox;
     private GuiTextField tabNameField;
 
+    // lazyInit済みフラグ（GUI開くたびにリセット）
+    private boolean _guiInitDone = false;
+
     // スクロールバー制御用
     private boolean isScrolling = false;
     private boolean isFavoriteScrolling  = false;
@@ -451,39 +454,45 @@ public class ComputerScreen extends GuiContainer {
         this.ySize = 222;
     }
 
+    private void lazyInit() {
+        syncGuiFields();
+        try {
+            int left = (this.width - this.xSize) / 2;
+            int top  = (this.height - this.ySize) / 2;
+            this.searchBox   = new GuiTextField(this.fontRenderer, left + 66,  top + 10, 100, 12);
+            gtfSetFocused(this.searchBox, false);
+            gtfSetCanLoseFocus(this.searchBox, true);
+            this.tabNameField = new GuiTextField(this.fontRenderer, left + 192, top + 10,  80, 12);
+            List<ComputerBlockEntity.FavoriteTab> tabs = this.tileEntity.getTabsForPlayer(this.thePlayer);
+            if (this.selectedTabIndex < tabs.size()) {
+                gtfSetText(this.tabNameField, tabs.get(this.selectedTabIndex).name);
+            }
+            _guiInitDone = true;
+            FMLLOG.warning("[TSS_PC] lazyInit done: w=" + this.width + " h=" + this.height
+                    + " fontRenderer=" + (this.fontRenderer != null));
+        } catch (Throwable ig) {
+            FMLLOG.warning("[TSS_PC] lazyInit failed: " + ig.getClass().getSimpleName() + ": " + ig.getMessage());
+        }
+    }
+
     @Override
     public void func_73866_w() {
-        _dbgDrawCount = 0;       // GUIを開くたびに3フレーム分のdrawログを再有効化
-        _dbgRectWarnDone = false; // 警告フラグもリセット
-        syncGuiFields();
-        // super.func_73866_w() は GuiContainer.initGui → MC内部処理。SRG名問題で例外を投げる
-        // 可能性があるため try-catch で保護する。失敗しても以降の初期化を続行する。
+        _dbgDrawCount = 0;
+        _dbgRectWarnDone = false;
+        _guiInitDone = false;
+        this.searchBox   = null;
+        this.tabNameField = null;
         try { super.func_73866_w(); } catch (Throwable ig) {
             FMLLOG.warning("[TSS_PC] super.func_73866_w() threw: " + ig.getClass().getSimpleName() + ": " + ig.getMessage());
         }
-        syncGuiFields(); // super後にもう一度同期（MCがfontRendererを設定するのを確実に拾う）
-        FMLLOG.warning("[TSS_PC] initGui: w=" + this.width + " h=" + this.height
-                + " fontRenderer=" + (this.fontRenderer != null)
-                + " _gsFR=" + (_gsFR != null));
-        int left = (this.width - this.xSize) / 2;
-        int top = (this.height - this.ySize) / 2;
-
-        this.searchBox = new GuiTextField(this.fontRenderer, left + 66, top + 10, 100, 12);
-        gtfSetFocused(this.searchBox, false);
-        gtfSetCanLoseFocus(this.searchBox, true);
-
-        this.tabNameField = new GuiTextField(this.fontRenderer, left + 192, top + 10, 80, 12);
-        List<ComputerBlockEntity.FavoriteTab> tabs = this.tileEntity.getTabsForPlayer(this.thePlayer);
-        if (this.selectedTabIndex < tabs.size()) {
-            gtfSetText(this.tabNameField, tabs.get(this.selectedTabIndex).name);
-        }
+        lazyInit();
     }
 
     @Override
     protected void func_74185_a(float partialTicks, int mouseX, int mouseY) {
         if (this.searchBox == null) {
-            FMLLOG.warning("[TSS_PC] drawBackground: searchBox is null, skipping draw");
-            return;
+            lazyInit();
+            if (this.searchBox == null) return; // lazyInitも失敗した場合のみスキップ
         }
         syncGuiFields(); // 毎フレーム確実に同期
         if (_dbgDrawCount < 3) {
@@ -1105,8 +1114,8 @@ public class ComputerScreen extends GuiContainer {
     private void syncGuiFields() {
         net.minecraft.client.Minecraft mcInst = getMCInstance();
         if (mcInst != null) this.mc = mcInst;
-        try { if (_gsW  != null) this.width  = _gsW.getInt(this); } catch (Exception ignored) {}
-        try { if (_gsH  != null) this.height = _gsH.getInt(this); } catch (Exception ignored) {}
+        try { if (_gsW  != null) this.width  = _gsW.getInt(this); } catch (Throwable ignored) {}
+        try { if (_gsH  != null) this.height = _gsH.getInt(this); } catch (Throwable ignored) {}
         // width/heightが0ならScaledResolutionかDisplayから取得する
         if (this.width <= 0 || this.height <= 0) {
             try {
@@ -1134,7 +1143,7 @@ public class ComputerScreen extends GuiContainer {
             if (this.width  <= 0) try { this.width  = org.lwjgl.opengl.Display.getWidth();  } catch (Throwable ig) {}
             if (this.height <= 0) try { this.height = org.lwjgl.opengl.Display.getHeight(); } catch (Throwable ig) {}
         }
-        try { if (_gsFR != null) this.fontRenderer = (net.minecraft.client.gui.FontRenderer) _gsFR.get(this); } catch (Exception ignored) {}
+        try { if (_gsFR != null) this.fontRenderer = (net.minecraft.client.gui.FontRenderer) _gsFR.get(this); } catch (Throwable ignored) {}
     }
 
     private Object getRenderEngine() {
