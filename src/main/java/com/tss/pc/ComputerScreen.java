@@ -94,6 +94,10 @@ public class ComputerScreen extends GuiContainer {
     private static java.lang.reflect.Method _isGetDamage, _isHasTag, _isGetTag;
     // CompressedStreamTools.compress(NBTTagCompound)
     private static java.lang.reflect.Method _csCompress;
+    // GuiContainer の int フィールド: [xSize, ySize, guiLeft, guiTop]
+    // super.initGui() が guiLeft/guiTop を xSize=176 で計算してしまうため
+    // 正しい xSize/ySize を書き込んでから super を呼ぶ。さらに guiLeft/guiTop を上書きする。
+    private static java.lang.reflect.Field _gcXSizeF, _gcYSizeF, _gcLeftF, _gcTopF;
     // GuiTextField メソッド (全てSRG名のためリフレクション)
     private static java.lang.reflect.Method _gtfSetFocused, _gtfSetCanLoseFocus;
     private static java.lang.reflect.Method _gtfSetText, _gtfGetText, _gtfIsFocused;
@@ -487,8 +491,40 @@ public class ComputerScreen extends GuiContainer {
         this.ySize = 222;
     }
 
+    private static void ensureGCFields() {
+        if (_gcLeftF != null) return;
+        java.util.List<java.lang.reflect.Field> fs = new java.util.ArrayList<>();
+        for (java.lang.reflect.Field f : net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredFields()) {
+            if (f.getType() == int.class) { try { f.setAccessible(true); } catch (Throwable ig) {} fs.add(f); }
+        }
+        if (fs.size() >= 1) _gcXSizeF = fs.get(0); // xSize (default 176)
+        if (fs.size() >= 2) _gcYSizeF = fs.get(1); // ySize (default 166)
+        if (fs.size() >= 3) _gcLeftF  = fs.get(2); // guiLeft
+        if (fs.size() >= 4) _gcTopF   = fs.get(3); // guiTop
+        FMLLOG.warning("[TSS_PC] GuiContainer int fields: " + fs.size()
+                + (_gcLeftF != null ? " OK" : " MISSING guiLeft"));
+    }
+    private void fixSuperXYSize() {
+        ensureGCFields();
+        try { if (_gcXSizeF != null) _gcXSizeF.setInt(this, this.xSize); } catch (Throwable ig) {}
+        try { if (_gcYSizeF != null) _gcYSizeF.setInt(this, this.ySize); } catch (Throwable ig) {}
+    }
+    private void fixGuiLeftTop() {
+        ensureGCFields();
+        syncGuiFields();
+        int left = (this.width  - this.xSize) / 2;
+        int top  = (this.height - this.ySize) / 2;
+        try { if (_gcLeftF != null) _gcLeftF.setInt(this, left); } catch (Throwable ig) {}
+        try { if (_gcTopF  != null) _gcTopF.setInt(this, top);  } catch (Throwable ig) {}
+        FMLLOG.warning("[TSS_PC] guiPos: left=" + left + " top=" + top
+                + " w=" + this.width + " h=" + this.height);
+    }
+
     private void lazyInit() {
         syncGuiFields();
+        // フォールバック時も guiLeft/guiTop が正しくない場合に備えて修正する
+        fixSuperXYSize();
+        fixGuiLeftTop();
         try {
             int left = (this.width - this.xSize) / 2;
             int top  = (this.height - this.ySize) / 2;
@@ -515,9 +551,14 @@ public class ComputerScreen extends GuiContainer {
         _guiInitDone = false;
         this.searchBox   = null;
         this.tabNameField = null;
+        // GuiContainer の xSize/ySize を正しい値に上書きしてから super.initGui を呼ぶ
+        // → super が guiLeft = (width - 300) / 2 を計算できるようにする
+        fixSuperXYSize();
         try { super.func_73866_w(); } catch (Throwable ig) {
             FMLLOG.warning("[TSS_PC] super.func_73866_w() threw: " + ig.getClass().getSimpleName() + ": " + ig.getMessage());
         }
+        // super の計算結果を確認し guiLeft/guiTop を正しい値に確定させる
+        fixGuiLeftTop();
         lazyInit();
     }
 
