@@ -98,6 +98,7 @@ public class ComputerScreen extends GuiContainer {
     // super.initGui() が guiLeft/guiTop を xSize=176 で計算してしまうため
     // 正しい xSize/ySize を書き込んでから super を呼ぶ。さらに guiLeft/guiTop を上書きする。
     private static java.lang.reflect.Field _gcXSizeF, _gcYSizeF, _gcLeftF, _gcTopF;
+    private static boolean _gcFieldsInitialized = false;
     // GuiTextField メソッド (全てSRG名のためリフレクション)
     private static java.lang.reflect.Method _gtfSetFocused, _gtfSetCanLoseFocus;
     private static java.lang.reflect.Method _gtfSetText, _gtfGetText, _gtfIsFocused;
@@ -491,33 +492,85 @@ public class ComputerScreen extends GuiContainer {
         this.ySize = 222;
     }
 
+    private static java.lang.reflect.Field gcTryName(String name) {
+        try {
+            java.lang.reflect.Field f = net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredField(name);
+            f.setAccessible(true);
+            return f;
+        } catch (Throwable ig) { return null; }
+    }
     private static void ensureGCFields() {
-        if (_gcLeftF != null) return;
-        java.util.List<java.lang.reflect.Field> fs = new java.util.ArrayList<>();
+        if (_gcFieldsInitialized) return;
+        _gcFieldsInitialized = true;
+        // まず MCP名で試みる (Forge が MCP名のまま保持する可能性)
+        _gcXSizeF = gcTryName("xSize");
+        _gcYSizeF = gcTryName("ySize");
+        _gcLeftF  = gcTryName("guiLeft");
+        _gcTopF   = gcTryName("guiTop");
+        // 全 int フィールドを列挙してデバッグログに出力 + インデックスフォールバック
+        java.util.List<java.lang.reflect.Field> intFs = new java.util.ArrayList<>();
+        StringBuilder sb = new StringBuilder("[TSS_PC] GC int fields:");
         for (java.lang.reflect.Field f : net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredFields()) {
-            if (f.getType() == int.class) { try { f.setAccessible(true); } catch (Throwable ig) {} fs.add(f); }
+            if (f.getType() == int.class) {
+                try { f.setAccessible(true); } catch (Throwable ig) {}
+                intFs.add(f);
+                sb.append(" ").append(f.getName());
+            }
         }
-        if (fs.size() >= 1) _gcXSizeF = fs.get(0); // xSize (default 176)
-        if (fs.size() >= 2) _gcYSizeF = fs.get(1); // ySize (default 166)
-        if (fs.size() >= 3) _gcLeftF  = fs.get(2); // guiLeft
-        if (fs.size() >= 4) _gcTopF   = fs.get(3); // guiTop
-        FMLLOG.warning("[TSS_PC] GuiContainer int fields: " + fs.size()
-                + (_gcLeftF != null ? " OK" : " MISSING guiLeft"));
+        FMLLOG.warning(sb.toString());
+        FMLLOG.warning("[TSS_PC] GC by name: xSize=" + (_gcXSizeF != null ? _gcXSizeF.getName() : "MISS")
+                + " ySize=" + (_gcYSizeF != null ? _gcYSizeF.getName() : "MISS")
+                + " guiLeft=" + (_gcLeftF != null ? _gcLeftF.getName() : "MISS")
+                + " guiTop=" + (_gcTopF != null ? _gcTopF.getName() : "MISS"));
+        // MCP名が取れなかった場合はインデックスベースフォールバック (xSize, ySize, guiLeft, guiTop の宣言順)
+        if (_gcXSizeF == null && intFs.size() >= 1) _gcXSizeF = intFs.get(0);
+        if (_gcYSizeF == null && intFs.size() >= 2) _gcYSizeF = intFs.get(1);
+        if (_gcLeftF  == null && intFs.size() >= 3) _gcLeftF  = intFs.get(2);
+        if (_gcTopF   == null && intFs.size() >= 4) _gcTopF   = intFs.get(3);
     }
     private void fixSuperXYSize() {
         ensureGCFields();
-        try { if (_gcXSizeF != null) _gcXSizeF.setInt(this, this.xSize); } catch (Throwable ig) {}
-        try { if (_gcYSizeF != null) _gcYSizeF.setInt(this, this.ySize); } catch (Throwable ig) {}
+        // 値マッチングフォールバック: super の xSize=176 / ySize=166 を持つフィールドを探す
+        if (_gcXSizeF == null || _gcYSizeF == null) {
+            for (java.lang.reflect.Field f : net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredFields()) {
+                if (f.getType() != int.class) continue;
+                try {
+                    int v = f.getInt(this);
+                    if (v == 176 && _gcXSizeF == null) { _gcXSizeF = f; }
+                    else if (v == 166 && _gcYSizeF == null) { _gcYSizeF = f; }
+                } catch (Throwable ig) {}
+            }
+        }
+        boolean xOk = false, yOk = false;
+        try { if (_gcXSizeF != null) { _gcXSizeF.setInt(this, this.xSize); xOk = true; } } catch (Throwable ig) {}
+        try { if (_gcYSizeF != null) { _gcYSizeF.setInt(this, this.ySize); yOk = true; } } catch (Throwable ig) {}
+        FMLLOG.warning("[TSS_PC] fixSuperXYSize: xSize=" + (xOk ? "OK(" + (_gcXSizeF != null ? _gcXSizeF.getName() : "?") + ")" : "FAIL")
+                + " ySize=" + (yOk ? "OK" : "FAIL"));
     }
     private void fixGuiLeftTop() {
-        ensureGCFields();
         syncGuiFields();
         int left = (this.width  - this.xSize) / 2;
         int top  = (this.height - this.ySize) / 2;
-        try { if (_gcLeftF != null) _gcLeftF.setInt(this, left); } catch (Throwable ig) {}
-        try { if (_gcTopF  != null) _gcTopF.setInt(this, top);  } catch (Throwable ig) {}
-        FMLLOG.warning("[TSS_PC] guiPos: left=" + left + " top=" + top
-                + " w=" + this.width + " h=" + this.height);
+        ensureGCFields();
+        // 値マッチングフォールバック: super.initGui() が書き込んだ値 (width-176)/2 or (width-300)/2 を探す
+        if (_gcLeftF == null || _gcTopF == null) {
+            int cL176 = (this.width  - 176) / 2;
+            int cT166 = (this.height - 166) / 2;
+            for (java.lang.reflect.Field f : net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredFields()) {
+                if (f.getType() != int.class || f == _gcXSizeF || f == _gcYSizeF) continue;
+                try {
+                    int v = f.getInt(this);
+                    if (_gcLeftF == null && (v == cL176 || v == left))  { _gcLeftF = f; continue; }
+                    if (_gcTopF  == null && (v == cT166  || v == top))   { _gcTopF  = f; }
+                } catch (Throwable ig) {}
+            }
+        }
+        boolean lOk = false, tOk = false;
+        try { if (_gcLeftF != null) { _gcLeftF.setInt(this, left); lOk = true; } } catch (Throwable ig) {}
+        try { if (_gcTopF  != null) { _gcTopF.setInt(this, top);  tOk = true; } } catch (Throwable ig) {}
+        FMLLOG.warning("[TSS_PC] fixGuiLeftTop: left=" + left + " top=" + top + " w=" + this.width + " h=" + this.height
+                + " lOk=" + lOk + "(" + (_gcLeftF != null ? _gcLeftF.getName() : "?") + ")"
+                + " tOk=" + tOk + "(" + (_gcTopF  != null ? _gcTopF.getName()  : "?") + ")");
     }
 
     private void lazyInit() {
