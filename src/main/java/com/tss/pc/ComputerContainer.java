@@ -22,8 +22,6 @@ public class ComputerContainer extends Container {
 
     // ランタイムでのaddSlotToContainerメソッドを動的に検索する
     private static java.lang.reflect.Method containerAddSlot;
-    // Slot.slotNumber フィールド (SRG名のため直接アクセス不可、リフレクションで設定)
-    private static java.lang.reflect.Field _slotNumberField;
     static {
         for (java.lang.reflect.Method m : net.minecraft.inventory.Container.class.getDeclaredMethods()) {
             Class<?>[] p = m.getParameterTypes();
@@ -31,14 +29,6 @@ public class ComputerContainer extends Container {
                 try { m.setAccessible(true); } catch (Exception e) {}
                 containerAddSlot = m;
                 System.out.println("DEBUG: Found addSlotToContainer: " + m.getName());
-                break;
-            }
-        }
-        // Slot の最初の int フィールドが slotNumber (SRG名)
-        for (java.lang.reflect.Field f : net.minecraft.inventory.Slot.class.getDeclaredFields()) {
-            if (f.getType() == int.class) {
-                try { f.setAccessible(true); } catch (Throwable ig) {}
-                _slotNumberField = f;
                 break;
             }
         }
@@ -52,17 +42,15 @@ public class ComputerContainer extends Container {
     private void addSlot(Slot slot) {
         int idx = _ownSlots.size();
         _ownSlots.add(slot);
-        // slotNumber をリフレクション経由で設定 (SRG名のため直接 slot.slotNumber = idx は NG)
-        if (_slotNumberField != null) {
-            try { _slotNumberField.setInt(slot, idx); } catch (Throwable ig) {}
-        }
-        // Container の内部リストにも登録（バニラ描画・クリック処理のため）
+        // slotNumber は Forge が追加したフィールドで MCP 名のまま → 直接書き込み可
+        // (SRG変換されない。NoSuchFieldError が来ても catch(Throwable) で保護)
+        try { slot.slotNumber = idx; } catch (Throwable ig) {}
+        // Container の内部リストにも登録（バニラ描画・detectAndSendChanges のため）
         if (containerAddSlot != null) {
             try { containerAddSlot.invoke(this, slot); return; } catch (Exception e) {
                 System.err.println("DEBUG: addSlot reflection failed: " + e.getMessage());
             }
         }
-        // addSlotToContainer が失敗した場合は field_75151_b に直接追加
         try { this.field_75151_b.add(slot); } catch (Throwable ignored) {}
     }
 

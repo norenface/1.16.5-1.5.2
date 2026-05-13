@@ -28,23 +28,31 @@ public class ComputerScreen extends GuiContainer {
     protected net.minecraft.client.Minecraft mc;
     protected net.minecraft.client.gui.FontRenderer fontRenderer;
 
-    // Slot フィールド (xDisplayPosition/yDisplayPosition/slotNumber) のSRG名が不明なためリフレクションで取得
+    // Slot フィールドをリフレクションで取得
+    // slotNumber: Forge が追加したフィールドで MCP 名のまま残っている → 名前で直接取得
+    // xDisplayPosition / yDisplayPosition: vanilla MC フィールド → SRG 名になっているため
+    //   int フィールドのインデックスで取得 (2番目・3番目)
     private static java.lang.reflect.Field _slotNumber;
     private static java.lang.reflect.Field _slotX;
     private static java.lang.reflect.Field _slotY;
     static {
+        // slotNumber を名前で取得 (Forge-added フィールドは SRG 変換されない)
+        try {
+            _slotNumber = net.minecraft.inventory.Slot.class.getDeclaredField("slotNumber");
+            _slotNumber.setAccessible(true);
+        } catch (Throwable ig) { _slotNumber = null; }
+
+        // xDisplayPosition / yDisplayPosition は SRG 名 → int フィールドの2番目・3番目
+        // (0番目は slotIndex = vanilla SRG フィールド、最後が slotNumber = Forge-added)
         java.util.List<java.lang.reflect.Field> intFields = new java.util.ArrayList<>();
         for (java.lang.reflect.Field f : net.minecraft.inventory.Slot.class.getDeclaredFields()) {
             if (f.getType() == int.class) {
-                f.setAccessible(true);
+                try { f.setAccessible(true); } catch (Throwable ig) {}
                 intFields.add(f);
-                System.out.println("DEBUG: Slot int field #" + (intFields.size()-1) + " = " + f.getName());
             }
         }
-        // MCP 7.51での宣言順: slotNumber(0), xDisplayPosition(1), yDisplayPosition(2)
-        if (intFields.size() >= 1) _slotNumber = intFields.get(0);
-        if (intFields.size() >= 2) _slotX      = intFields.get(1);
-        if (intFields.size() >= 3) _slotY      = intFields.get(2);
+        if (intFields.size() >= 2) _slotX = intFields.get(1);
+        if (intFields.size() >= 3) _slotY = intFields.get(2);
     }
 
     // GuiScreen / Minecraft のSRG名フィールドをリフレクション取得
