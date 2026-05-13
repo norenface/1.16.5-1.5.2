@@ -530,10 +530,19 @@ public class ComputerScreen extends GuiContainer {
     }
     private void fixSuperXYSize() {
         ensureGCFields();
-        // 値マッチングフォールバック: super の xSize=176 / ySize=166 を持つフィールドを探す
+        // インデックスベースで設定されたフィールドが正しいか値で検証する
+        // (実際に 176 を持つフィールドが xSize のはず)
+        if (_gcXSizeF != null) {
+            try { if (_gcXSizeF.getInt(this) != 176) _gcXSizeF = null; } catch (Throwable ig) { _gcXSizeF = null; }
+        }
+        if (_gcYSizeF != null) {
+            try { if (_gcYSizeF.getInt(this) != 166) _gcYSizeF = null; } catch (Throwable ig) { _gcYSizeF = null; }
+        }
+        // 値マッチングで再検索
         if (_gcXSizeF == null || _gcYSizeF == null) {
             for (java.lang.reflect.Field f : net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredFields()) {
                 if (f.getType() != int.class) continue;
+                try { f.setAccessible(true); } catch (Throwable ig) {}
                 try {
                     int v = f.getInt(this);
                     if (v == 176 && _gcXSizeF == null) { _gcXSizeF = f; }
@@ -552,12 +561,26 @@ public class ComputerScreen extends GuiContainer {
         int left = (this.width  - this.xSize) / 2;
         int top  = (this.height - this.ySize) / 2;
         ensureGCFields();
-        // 値マッチングフォールバック: super.initGui() が書き込んだ値 (width-176)/2 or (width-300)/2 を探す
+        int cL176 = (this.width  - 176) / 2;
+        int cT166 = (this.height - 166) / 2;
+        // 既存フィールドが正しい値を持つか検証 (guiLeft は super.initGui が設定した値)
+        if (_gcLeftF != null) {
+            try {
+                int v = _gcLeftF.getInt(this);
+                if (v != cL176 && v != left) _gcLeftF = null;
+            } catch (Throwable ig) { _gcLeftF = null; }
+        }
+        if (_gcTopF != null) {
+            try {
+                int v = _gcTopF.getInt(this);
+                if (v != cT166 && v != top) _gcTopF = null;
+            } catch (Throwable ig) { _gcTopF = null; }
+        }
+        // 値マッチングで再検索
         if (_gcLeftF == null || _gcTopF == null) {
-            int cL176 = (this.width  - 176) / 2;
-            int cT166 = (this.height - 166) / 2;
             for (java.lang.reflect.Field f : net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredFields()) {
                 if (f.getType() != int.class || f == _gcXSizeF || f == _gcYSizeF) continue;
+                try { f.setAccessible(true); } catch (Throwable ig) {}
                 try {
                     int v = f.getInt(this);
                     if (_gcLeftF == null && (v == cL176 || v == left))  { _gcLeftF = f; continue; }
@@ -630,8 +653,6 @@ public class ComputerScreen extends GuiContainer {
                     + " tessQuads=" + (_tessStartQuads != null)
                     + " tessStart=" + (_tessStart != null));
         }
-        Object re = getRenderEngine();
-        if (re != null) reBind(re, "/font/default.png");
         int left = (this.width - this.xSize) / 2;
         int top = (this.height - this.ySize) / 2;
         this.tabX = left + this.xSize;
@@ -640,22 +661,22 @@ public class ComputerScreen extends GuiContainer {
         GL11.glDisable(GL11.GL_TEXTURE_2D);
 
         // メイン背景
-        drawColoredRect(left, top, left + this.xSize, top + this.ySize, 0xCC1E1E1E);
+        drawColoredRect(left, top, left + this.xSize, top + this.ySize, 0xFF1E1E1E);
 
-        // 外枠
-        int borderColor = 0xFF3E3E42;
-        drawColoredRect(left, top, left + this.xSize, top + 1, borderColor);
-        drawColoredRect(left, top + this.ySize - 1, left + this.xSize, top + this.ySize, borderColor);
-        drawColoredRect(left, top, left + 1, top + this.ySize, borderColor);
-        drawColoredRect(left + this.xSize - 1, top, left + this.xSize, top + this.ySize, borderColor);
+        // 仕切り線: メインストレージ / お気に入り の間
+        drawColoredRect(left + 186, top, left + 187, top + this.ySize, 0xFF3E3E42);
+        // Inventory ラベル上の区切り線
+        drawColoredRect(left, top + 132, left + 186, top + 133, 0xFF3E3E42);
 
-        // スロット枠線ループ
-        for (int s = 0; s < this.container.getSlots().size(); s++) {
-            net.minecraft.inventory.Slot slot = (net.minecraft.inventory.Slot) this.container.getSlots().get(s);
-            int slotX = left + slotX(slot) - 1;
-            int slotY = top + slotY(slot) - 1;
-            drawColoredRect(slotX, slotY, slotX + 18, slotY + 18, 0xFF3E3E42);
-            drawColoredRect(slotX + 1, slotY + 1, slotX + 17, slotY + 17, 0xFF252526);
+        // スロット枠線ループ — スロットX/Y はリフレクションに依存せず直接計算
+        int totalSlots = this.container.getSlots().size();
+        for (int s = 0; s < totalSlots; s++) {
+            int sx = computeSlotX(s);
+            int sy = computeSlotY(s);
+            int rx = left + sx - 1;
+            int ry = top + sy - 1;
+            drawColoredRect(rx, ry, rx + 18, ry + 18, 0xFF3E3E42);
+            drawColoredRect(rx + 1, ry + 1, rx + 17, ry + 17, 0xFF252526);
         }
 
         // メインスクロールバー
@@ -822,8 +843,8 @@ public class ComputerScreen extends GuiContainer {
                     org.lwjgl.opengl.GL11.glScalef(scale, scale, scale);
 
                     int textWidth = frGetStrWidth(this.fontRenderer, displayStr);
-                    float x = (slotX(slot) + 16 - 1) / scale - textWidth;
-                    float y = (slotY(slot) + 16 - (7 * scale)) / scale;
+                    float x = (computeSlotX(i) + 16 - 1) / scale - textWidth;
+                    float y = (computeSlotY(i) + 16 - (7 * scale)) / scale;
 
                     frDrawStrShadow(this.fontRenderer, displayStr, (int)x, (int)y, color);
 
