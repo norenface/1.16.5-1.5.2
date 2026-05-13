@@ -35,6 +35,9 @@ public class ComputerScreen extends GuiContainer {
     private static java.lang.reflect.Field _slotNumber;
     private static java.lang.reflect.Field _slotX;
     private static java.lang.reflect.Field _slotY;
+    // Slot メソッド (SRG名のためリフレクション)
+    private static java.lang.reflect.Method _slotHasStack; // getHasStack() → boolean
+    private static java.lang.reflect.Method _slotGetStack;  // getStack()    → ItemStack
     static {
         // slotNumber を名前で取得 (Forge-added フィールドは SRG 変換されない)
         try {
@@ -53,6 +56,28 @@ public class ComputerScreen extends GuiContainer {
         }
         if (intFields.size() >= 2) _slotX = intFields.get(1);
         if (intFields.size() >= 3) _slotY = intFields.get(2);
+
+        // Slot メソッドをシグネチャで検索 (SRG名が実行時と一致しない問題を回避)
+        // クラス階層をウォークして宣言元を問わず取得
+        {
+            Class<?> cls = net.minecraft.inventory.Slot.class;
+            while (cls != null && cls != Object.class) {
+                for (java.lang.reflect.Method m : cls.getDeclaredMethods()) {
+                    try { m.setAccessible(true); } catch (Throwable ig) {}
+                    Class<?>[] p = m.getParameterTypes();
+                    Class<?> r = m.getReturnType();
+                    if (p.length == 0 && r == boolean.class && _slotHasStack == null)
+                        _slotHasStack = m;
+                    if (p.length == 0 && r == net.minecraft.item.ItemStack.class && _slotGetStack == null)
+                        _slotGetStack = m;
+                }
+                cls = cls.getSuperclass();
+            }
+            System.out.println("[TSS_PC] Slot methods: hasStack="
+                    + (_slotHasStack != null ? _slotHasStack.getName() : "null")
+                    + " getStack="
+                    + (_slotGetStack != null ? _slotGetStack.getName() : "null"));
+        }
     }
 
     // GuiScreen / Minecraft のSRG名フィールドをリフレクション取得
@@ -377,6 +402,14 @@ public class ComputerScreen extends GuiContainer {
         try { return s.slotNumber; } catch (Throwable e) {}
         return 0;
     }
+    private static boolean slotHasStack(net.minecraft.inventory.Slot s) {
+        if (_slotHasStack != null) try { return (Boolean) _slotHasStack.invoke(s); } catch (Throwable ig) {}
+        try { return s.func_75216_f(); } catch (Throwable ignored) { return false; }
+    }
+    private static net.minecraft.item.ItemStack slotGetStack(net.minecraft.inventory.Slot s) {
+        if (_slotGetStack != null) try { return (net.minecraft.item.ItemStack) _slotGetStack.invoke(s); } catch (Throwable ig) {}
+        try { return s.func_75211_c(); } catch (Throwable ignored) { return null; }
+    }
     // スロットのX/Y座標: リフレクションが失敗した場合はインデックスから直接計算
     // s.xDisplayPosition / s.yDisplayPosition はSRG名が違うためNoSuchFieldErrorになる
     private static int slotX(net.minecraft.inventory.Slot s) {
@@ -671,8 +704,8 @@ public class ComputerScreen extends GuiContainer {
 
         for (int i = 0; i < 90; i++) {
             Slot slot = (Slot) this.container.getSlots().get(i);
-            if (slot != null && slot.func_75216_f()) {
-                ItemStack stackInSlot = slot.func_75211_c();
+            if (slot != null && slotHasStack(slot)) {
+                ItemStack stackInSlot = slotGetStack(slot);
 
                 int realCount = 0;
                 boolean hasRealCount = false;
@@ -729,25 +762,25 @@ public class ComputerScreen extends GuiContainer {
             int id = slotNum(slot);
 
             if (id >= 0 && id < 45) {
-                if (MCHelper.invGetItemStack(this.thePlayer.field_71071_by) == null && slot.func_75216_f()) {
+                if (MCHelper.invGetItemStack(this.thePlayer.field_71071_by) == null && slotHasStack(slot)) {
                     if (button == 0) {
                         this.isDraggingItem = true;
-                        this.draggingStack = MCHelper.itemCopy(slot.func_75211_c());
+                        this.draggingStack = MCHelper.itemCopy(slotGetStack(slot));
                         this.pressedSlotIndex = id;
                         boolean isShift = org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_LSHIFT) ||
                                 org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_RSHIFT);
                         int amount = isShift ? 64 : 1;
-                        this.sendComputerPacket(2, 0, id, slot.func_75211_c(), amount);
+                        this.sendComputerPacket(2, 0, id, slotGetStack(slot), amount);
                         playSoundFX("random.click", 0.6F, 1.2F);
                         return;
                     }
                 }
             } else if (id >= 45 && id < 90) {
-                if (MCHelper.invGetItemStack(this.thePlayer.field_71071_by) == null && slot.func_75216_f()) {
+                if (MCHelper.invGetItemStack(this.thePlayer.field_71071_by) == null && slotHasStack(slot)) {
                     if (button == 0 || button == 1) {
                         boolean isShift = org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_LSHIFT);
                         int amount = isShift ? 64 : 1;
-                        this.sendComputerPacket(2, 0, id, slot.func_75211_c(), amount);
+                        this.sendComputerPacket(2, 0, id, slotGetStack(slot), amount);
                         playSoundFX("random.click", 0.6F, 1.2F);
                     }
                 }
@@ -929,9 +962,9 @@ public class ComputerScreen extends GuiContainer {
                 this.sendComputerPacket(6, 0, slotId, heldStack, 0);
                 return;
             }
-            if (slot != null && slot.func_75216_f()) {
+            if (slot != null && slotHasStack(slot)) {
                 int amount = (mode == 1) ? 64 : 1;
-                this.sendComputerPacket(2, 0, slotId, slot.func_75211_c(), amount);
+                this.sendComputerPacket(2, 0, slotId, slotGetStack(slot), amount);
                 return;
             }
             return;
