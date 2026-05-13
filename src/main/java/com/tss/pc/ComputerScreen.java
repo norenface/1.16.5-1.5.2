@@ -773,6 +773,24 @@ public class ComputerScreen extends GuiContainer {
         int top = (this.height - this.ySize) / 2;
         ComputerContainer container = this.container;
 
+        // GuiContainer の guiLeft/guiTop を毎フレーム正しい値に強制設定する
+        // super.drawScreen() がこれらを使ってアイテムを描画するため、
+        // initGui での修正が不完全でも毎フレームここで確実に直す
+        try { if (_gcLeftF != null) _gcLeftF.setInt(this, left); } catch (Throwable ig) {}
+        try { if (_gcTopF  != null) _gcTopF.setInt(this, top);  } catch (Throwable ig) {}
+        // _gcLeftF/Top が null (発見失敗) の場合は値マッチングで動的検索して設定
+        if (_gcLeftF == null || _gcTopF == null) {
+            int wL = (this.width - 176) / 2, wT = (this.height - 166) / 2;
+            for (java.lang.reflect.Field f : net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredFields()) {
+                if (f.getType() != int.class) continue;
+                try {
+                    int v = f.getInt(this);
+                    if (_gcLeftF == null && (v == wL || v == left))  { _gcLeftF = f; f.setInt(this, left); }
+                    if (_gcTopF  == null && (v == wT  || v == top))  { _gcTopF  = f; f.setInt(this, top);  }
+                } catch (Throwable ig) {}
+            }
+        }
+
         if (isMouseDown) {
             if (mouseX >= left + 172 && mouseX <= left + 184 && mouseY >= top + 26 && mouseY <= top + 116) {
                 float relY = (float)(mouseY - (top + 26)) / 140.0F;
@@ -809,13 +827,17 @@ public class ComputerScreen extends GuiContainer {
 
     @Override
     protected void func_74184_a(int mouseX, int mouseY) {
-        frDrawStr(this.fontRenderer, "TSS_PC", 8, 12, 0xAAAAAA);
-        frDrawStr(this.fontRenderer, "Inventory", 8, 126, 0xAAAAAA);
-        frDrawStr(this.fontRenderer, "[+Row]", 233, 190, 0xAAAAAA);
-        frDrawStr(this.fontRenderer, "[-Row]", 260, 190, 0xAAAAAA);
-        int buttonsY = 190;
-        frDrawStr(this.fontRenderer, "[+]", this.xSize + 5, buttonsY, 0x00FF00);
-        frDrawStr(this.fontRenderer, "[-]", this.xSize + 5, buttonsY + 12, 0xFF0000);
+        // このメソッドは GuiContainer が GL translate(guiLeft, guiTop) した後に呼ばれる
+        // → 座標はスロット座標系 (xDisplayPosition 基準) と同じ相対座標
+        frDrawStr(this.fontRenderer, "TSS_PC",   8,   5, 0xAAAAAA);
+        frDrawStr(this.fontRenderer, "Search:",  8,  14, 0x888888);
+        frDrawStr(this.fontRenderer, "Inventory", 8, 133, 0xAAAAAA);
+        // お気に入りエリア下部のボタン (xSize=300, お気に入りエリアは x=192-282)
+        frDrawStr(this.fontRenderer, "[+Row]", 192, 193, 0xAAAAAA);
+        frDrawStr(this.fontRenderer, "[-Row]", 228, 193, 0xAAAAAA);
+        // タブパネル内のボタン (guiLeft 相対 xSize+数px)
+        frDrawStr(this.fontRenderer, "[+]", this.xSize + 4, 194, 0x00FF00);
+        frDrawStr(this.fontRenderer, "[-]", this.xSize + 4, 206, 0xFF0000);
 
         for (int i = 0; i < 90; i++) {
             Slot slot = (Slot) this.container.getSlots().get(i);
@@ -1541,18 +1563,28 @@ public class ComputerScreen extends GuiContainer {
     }
 
     private net.minecraft.inventory.Slot getSlotAtPositionEx(int mouseX, int mouseY) {
+        int left = (this.width - this.xSize) / 2;
+        int top  = (this.height - this.ySize) / 2;
         for (int i = 0; i < this.container.getSlots().size(); ++i) {
-            net.minecraft.inventory.Slot slot = (net.minecraft.inventory.Slot) this.container.getSlots().get(i);
-            if (this.isMouseOverSlotEx(slot, mouseX, mouseY)) return slot;
+            int sx = computeSlotX(i);
+            int sy = computeSlotY(i);
+            if (mouseX >= left + sx && mouseX < left + sx + 16 &&
+                mouseY >= top  + sy && mouseY < top  + sy + 16) {
+                return (net.minecraft.inventory.Slot) this.container.getSlots().get(i);
+            }
         }
         return null;
     }
 
     private boolean isMouseOverSlotEx(net.minecraft.inventory.Slot slot, int mouseX, int mouseY) {
+        // 後方互換のため残す（getSlotAtPositionEx から直接は呼ばれなくなったが他から呼ばれる可能性）
         int left = (this.width - this.xSize) / 2;
-        int top = (this.height - this.ySize) / 2;
-        return mouseX >= left + slotX(slot) - 1 && mouseX <= left + slotX(slot) + 16 &&
-                mouseY >= top + slotY(slot) - 1 && mouseY <= top + slotY(slot) + 16;
+        int top  = (this.height - this.ySize) / 2;
+        int idx  = slotNum(slot);
+        int sx   = computeSlotX(idx);
+        int sy   = computeSlotY(idx);
+        return mouseX >= left + sx && mouseX < left + sx + 16 &&
+               mouseY >= top  + sy && mouseY < top  + sy + 16;
     }
 
     private int getActualFavoriteIndex(int slotIndex) {
