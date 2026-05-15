@@ -519,63 +519,53 @@ public class ComputerScreen extends GuiContainer {
                 + " guiTop=" + (_gcTopF != null ? "OK" : "MISS"));
     }
     /**
-     * super.func_73866_w() 実行前後の差分でフィールドを特定する。
-     * guiLeft/guiTop は initGui で 0 から (w-176)/2,(h-166)/2 に変化するため
-     * 変化したフィールドを優先検索することで他フィールドとの値衝突を排除する。
+     * GuiContainer の xSize/ySize フィールドを super.initGui() の前に正しい値に設定する。
+     * super が guiLeft = (w - xSize) / 2 を計算するとき、xSize=300 になっているので
+     * guiLeft = (w-300)/2 が自動的に正しく設定される。
      */
-    private void fixGuiFieldsPostInit(java.util.Map<java.lang.reflect.Field, Integer> preVals) {
-        syncGuiFields();
-        int left  = (this.width  - this.xSize) / 2;
-        int top   = (this.height - this.ySize) / 2;
-        int cL176 = (this.width  - 176) / 2;
-        int cT166 = (this.height - 166) / 2;
+    private void setGCSizesBeforeSuper() {
         ensureGCFields();
-        java.lang.reflect.Field xF = _gcXSizeF, yF = _gcYSizeF, lF = _gcLeftF, tF = _gcTopF;
-        // キャッシュ済みフィールドを現在値で検証
-        if (xF != null) { try { if (xF.getInt(this) != 176) xF = null; } catch (Throwable ig) { xF = null; } }
-        if (yF != null) { try { if (yF.getInt(this) != 166) yF = null; } catch (Throwable ig) { yF = null; } }
-        if (lF != null) { try { int v = lF.getInt(this); if (v != cL176 && v != left) lF = null; } catch (Throwable ig) { lF = null; } }
-        if (tF != null) { try { int v = tF.getInt(this); if (v != cT166 && v != top)  tF = null; } catch (Throwable ig) { tF = null; } }
-        // 第1フェーズ: 変化したフィールドを優先 (guiLeft/guiTop は initGui で必ず変化する)
-        if (xF == null || yF == null || lF == null || tF == null) {
-            for (java.lang.reflect.Field f : net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredFields()) {
-                if (f.getType() != int.class) continue;
-                try { f.setAccessible(true); } catch (Throwable ig) {}
-                try {
-                    int after  = f.getInt(this);
-                    int before = preVals.containsKey(f) ? preVals.get(f) : after;
-                    boolean changed = (before != after);
-                    if      (xF == null && after == 176)               { xF = f; }
-                    else if (yF == null && after == 166)               { yF = f; }
-                    else if (lF == null && changed && after == cL176)  { lF = f; }
-                    else if (tF == null && changed && after == cT166)  { tF = f; }
-                } catch (Throwable ig) {}
-            }
-        }
-        // 第2フェーズ: 変化なしフォールバック (guiLeft が既に correct な場合など)
-        if (lF == null || tF == null) {
+        // MCP名で見つからなければ初期値(176,166)でスキャン
+        if (_gcXSizeF == null || _gcYSizeF == null) {
             for (java.lang.reflect.Field f : net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredFields()) {
                 if (f.getType() != int.class) continue;
                 try {
+                    f.setAccessible(true);
                     int v = f.getInt(this);
-                    if (lF == null && (v == cL176 || v == left)) { lF = f; }
-                    if (tF == null && (v == cT166 || v == top))  { tF = f; }
+                    if (_gcXSizeF == null && v == 176) { _gcXSizeF = f; }
+                    else if (_gcYSizeF == null && v == 166) { _gcYSizeF = f; }
                 } catch (Throwable ig) {}
             }
         }
-        if (xF != null) _gcXSizeF = xF;
-        if (yF != null) _gcYSizeF = yF;
-        if (lF != null) _gcLeftF  = lF;
-        if (tF != null) _gcTopF   = tF;
-        boolean xOk=false, yOk=false, lOk=false, tOk=false;
-        try { if (xF != null) { xF.setInt(this, this.xSize); xOk = true; } } catch (Throwable ig) {}
-        try { if (yF != null) { yF.setInt(this, this.ySize); yOk = true; } } catch (Throwable ig) {}
-        try { if (lF != null) { lF.setInt(this, left);       lOk = true; } } catch (Throwable ig) {}
-        try { if (tF != null) { tF.setInt(this, top);        tOk = true; } } catch (Throwable ig) {}
-        FMLLOG.warning("[TSS_PC] fixGuiFields: w=" + this.width + " left=" + left + " cL176=" + cL176
-                + " xF=" + (xOk ? "OK("+xF.getName()+")" : "FAIL")
-                + " lF=" + (lOk ? "OK("+lF.getName()+")" : "FAIL(cL="+cL176+")")
-                + " tF=" + (tOk ? "OK("+tF.getName()+")" : "FAIL"));
+        try { if (_gcXSizeF != null) _gcXSizeF.setInt(this, this.xSize); } catch (Throwable ig) {}
+        try { if (_gcYSizeF != null) _gcYSizeF.setInt(this, this.ySize); } catch (Throwable ig) {}
+        FMLLOG.warning("[TSS_PC] setGCSizes: xSize→" + this.xSize + " ySize→" + this.ySize
+                + " xF=" + (_gcXSizeF != null ? _gcXSizeF.getName() : "MISS")
+                + " yF=" + (_gcYSizeF != null ? _gcYSizeF.getName() : "MISS"));
+    }
+
+    /**
+     * super.initGui() 実行後に guiLeft/guiTop フィールドをキャッシュする。
+     * super が (w-300)/2 を設定した後なので値マッチングで確実に特定できる。
+     */
+    private void cacheGuiLeftTopFields() {
+        syncGuiFields();
+        int expL = (this.width  - this.xSize) / 2;
+        int expT = (this.height - this.ySize) / 2;
+        if (_gcLeftF == null || _gcTopF == null) {
+            for (java.lang.reflect.Field f : net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredFields()) {
+                if (f.getType() != int.class) continue;
+                try {
+                    f.setAccessible(true);
+                    int v = f.getInt(this);
+                    if (_gcLeftF == null && v == expL) { _gcLeftF = f; }
+                    else if (_gcTopF == null && v == expT) { _gcTopF = f; }
+                } catch (Throwable ig) {}
+            }
+        }
+        FMLLOG.warning("[TSS_PC] cacheGuiLeftTop: w=" + this.width + " expL=" + expL + " expT=" + expT
+                + " lF=" + (_gcLeftF != null ? _gcLeftF.getName() : "MISS")
+                + " tF=" + (_gcTopF  != null ? _gcTopF.getName()  : "MISS"));
     }
 
     private void lazyInit() {
@@ -606,17 +596,14 @@ public class ComputerScreen extends GuiContainer {
         _guiInitDone = false;
         this.searchBox   = null;
         this.tabNameField = null;
-        // super実行前に全int フィールド値を記録し、実行後に変化したフィールドでguiLeft/guiTopを特定する
-        java.util.HashMap<java.lang.reflect.Field, Integer> preVals = new java.util.HashMap<>();
-        for (java.lang.reflect.Field f : net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredFields()) {
-            if (f.getType() == int.class) {
-                try { f.setAccessible(true); preVals.put(f, f.getInt(this)); } catch (Throwable ig) {}
-            }
-        }
+        // super が guiLeft = (w - xSize) / 2 を計算する前に xSize=300, ySize=222 を設定する
+        // これにより super が正しい guiLeft/guiTop を自動計算する
+        setGCSizesBeforeSuper();
         try { super.func_73866_w(); } catch (Throwable ig) {
             FMLLOG.warning("[TSS_PC] super.func_73866_w() threw: " + ig.getClass().getSimpleName() + ": " + ig.getMessage());
         }
-        fixGuiFieldsPostInit(preVals);
+        // super が計算した guiLeft/guiTop フィールドをキャッシュする (per-frame 補正用)
+        cacheGuiLeftTopFields();
         lazyInit();
     }
 
