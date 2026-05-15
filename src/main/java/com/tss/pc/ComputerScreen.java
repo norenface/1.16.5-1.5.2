@@ -428,10 +428,10 @@ public class ComputerScreen extends GuiContainer {
     // ComputerContainerのスロット配置に合わせてインデックスからX/Y座標を計算
     // (Slot内部フィールドへのSRGアクセスを回避)
     private static int computeSlotX(int i) {
-        if (i < 45)  return 8   + (i % 9) * 18;          // メインストレージ
-        if (i < 90)  return 192 + ((i - 45) % 5) * 18;   // お気に入り
-        if (i < 117) return 8   + ((i - 90) % 9) * 18;   // プレイヤーインベントリ
-        return 8 + (i - 117) * 18;                         // ホットバー
+        if (i < 45)  return (i % 9) * 18;                 // メインストレージ
+        if (i < 90)  return 184 + ((i - 45) % 5) * 18;   // お気に入り
+        if (i < 117) return ((i - 90) % 9) * 18;          // プレイヤーインベントリ
+        return (i - 117) * 18;                             // ホットバー
     }
     private static int computeSlotY(int i) {
         if (i < 45)  return 26  + (i / 9) * 18;
