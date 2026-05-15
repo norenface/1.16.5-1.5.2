@@ -85,22 +85,22 @@ public class ComputerContainer extends Container {
 
         // 1. メインストレージ表示 (0-44)
         for (int i = 0; i < 45; i++) {
-            this.addSlot(new SlotReadOnly(storageView, i, 8 + (i % 9) * 18, 26 + (i / 9) * 18));
+            this.addSlot(new SlotReadOnly(storageView, i, (i % 9) * 18, 26 + (i / 9) * 18));
         }
 
         // 2. お気に入り (45-89)
         for (int i = 0; i < 45; i++) {
-            this.addSlot(new SlotReadOnly(favoriteView, i, 192 + (i % 5) * 18, 26 + (i / 5) * 18));
+            this.addSlot(new SlotReadOnly(favoriteView, i, 184 + (i % 5) * 18, 26 + (i / 5) * 18));
         }
 
         // 3. プレイヤーインベントリ (90-116)
         for (int i = 0; i < 27; i++) {
-            this.addSlot(new Slot(invPlayer, i + 9, 8 + (i % 9) * 18, 140 + (i / 9) * 18));
+            this.addSlot(new Slot(invPlayer, i + 9, (i % 9) * 18, 140 + (i / 9) * 18));
         }
 
         // 4. ホットバー (117-125)
         for (int i = 0; i < 9; i++) {
-            this.addSlot(new Slot(invPlayer, i, 8 + i * 18, 198));
+            this.addSlot(new Slot(invPlayer, i, i * 18, 198));
         }
 
         // デバッグ用：スロットがいくつ登録されたかコンソールに出す
