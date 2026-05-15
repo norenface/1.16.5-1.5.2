@@ -519,53 +519,63 @@ public class ComputerScreen extends GuiContainer {
                 + " guiTop=" + (_gcTopF != null ? "OK" : "MISS"));
     }
     /**
-     * super.func_73866_w() 実行後に呼ぶ。その時点での GuiContainer フィールド値:
-     *   xSize=176, ySize=166, guiLeft=(w-176)/2, guiTop=(h-166)/2 (vanilla の計算結果)
-     * これら vanilla 値でフィールドを確実に特定してから正しい値に上書きする。
-     * インデックスベースフォールバック廃止 → SRG名環境でも正確に動作。
+     * super.func_73866_w() 実行前後の差分でフィールドを特定する。
+     * guiLeft/guiTop は initGui で 0 から (w-176)/2,(h-166)/2 に変化するため
+     * 変化したフィールドを優先検索することで他フィールドとの値衝突を排除する。
      */
-    private void fixGuiFieldsPostInit() {
+    private void fixGuiFieldsPostInit(java.util.Map<java.lang.reflect.Field, Integer> preVals) {
         syncGuiFields();
-        int left  = (this.width  - this.xSize) / 2;   // 目標 guiLeft = (w-300)/2
-        int top   = (this.height - this.ySize) / 2;   // 目標 guiTop  = (h-222)/2
-        int cL176 = (this.width  - 176) / 2;          // super が設定した guiLeft
-        int cT166 = (this.height - 166) / 2;          // super が設定した guiTop
+        int left  = (this.width  - this.xSize) / 2;
+        int top   = (this.height - this.ySize) / 2;
+        int cL176 = (this.width  - 176) / 2;
+        int cT166 = (this.height - 166) / 2;
         ensureGCFields();
         java.lang.reflect.Field xF = _gcXSizeF, yF = _gcYSizeF, lF = _gcLeftF, tF = _gcTopF;
-        // キャッシュ済みフィールドを現在値で検証 (誤フィールドをローカルで除外)
+        // キャッシュ済みフィールドを現在値で検証
         if (xF != null) { try { if (xF.getInt(this) != 176) xF = null; } catch (Throwable ig) { xF = null; } }
         if (yF != null) { try { if (yF.getInt(this) != 166) yF = null; } catch (Throwable ig) { yF = null; } }
         if (lF != null) { try { int v = lF.getInt(this); if (v != cL176 && v != left) lF = null; } catch (Throwable ig) { lF = null; } }
         if (tF != null) { try { int v = tF.getInt(this); if (v != cT166 && v != top)  tF = null; } catch (Throwable ig) { tF = null; } }
-        // 未発見フィールドを vanilla 値マッチングで再検索
+        // 第1フェーズ: 変化したフィールドを優先 (guiLeft/guiTop は initGui で必ず変化する)
         if (xF == null || yF == null || lF == null || tF == null) {
             for (java.lang.reflect.Field f : net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredFields()) {
                 if (f.getType() != int.class) continue;
                 try { f.setAccessible(true); } catch (Throwable ig) {}
                 try {
-                    int v = f.getInt(this);
-                    if      (xF == null && v == 176)                 { xF = f; }
-                    else if (yF == null && v == 166)                 { yF = f; }
-                    else if (lF == null && (v == cL176 || v == left)){ lF = f; }
-                    else if (tF == null && (v == cT166 || v == top)) { tF = f; }
+                    int after  = f.getInt(this);
+                    int before = preVals.containsKey(f) ? preVals.get(f) : after;
+                    boolean changed = (before != after);
+                    if      (xF == null && after == 176)               { xF = f; }
+                    else if (yF == null && after == 166)               { yF = f; }
+                    else if (lF == null && changed && after == cL176)  { lF = f; }
+                    else if (tF == null && changed && after == cT166)  { tF = f; }
                 } catch (Throwable ig) {}
             }
         }
-        // 静的キャッシュを自己修正 (常に検証済みフィールドで更新)
+        // 第2フェーズ: 変化なしフォールバック (guiLeft が既に correct な場合など)
+        if (lF == null || tF == null) {
+            for (java.lang.reflect.Field f : net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredFields()) {
+                if (f.getType() != int.class) continue;
+                try {
+                    int v = f.getInt(this);
+                    if (lF == null && (v == cL176 || v == left)) { lF = f; }
+                    if (tF == null && (v == cT166 || v == top))  { tF = f; }
+                } catch (Throwable ig) {}
+            }
+        }
         if (xF != null) _gcXSizeF = xF;
         if (yF != null) _gcYSizeF = yF;
         if (lF != null) _gcLeftF  = lF;
         if (tF != null) _gcTopF   = tF;
-        // 正しい値に上書き
         boolean xOk=false, yOk=false, lOk=false, tOk=false;
         try { if (xF != null) { xF.setInt(this, this.xSize); xOk = true; } } catch (Throwable ig) {}
         try { if (yF != null) { yF.setInt(this, this.ySize); yOk = true; } } catch (Throwable ig) {}
         try { if (lF != null) { lF.setInt(this, left);       lOk = true; } } catch (Throwable ig) {}
         try { if (tF != null) { tF.setInt(this, top);        tOk = true; } } catch (Throwable ig) {}
-        FMLLOG.warning("[TSS_PC] fixGuiFieldsPostInit: left=" + left + " top=" + top
-                + " xF=" + (xOk ? "OK(" + xF.getName() + ")" : "FAIL")
-                + " lF=" + (lOk ? "OK(" + lF.getName() + ")" : "FAIL")
-                + " tF=" + (tOk ? "OK(" + tF.getName() + ")" : "FAIL"));
+        FMLLOG.warning("[TSS_PC] fixGuiFields: w=" + this.width + " left=" + left + " cL176=" + cL176
+                + " xF=" + (xOk ? "OK("+xF.getName()+")" : "FAIL")
+                + " lF=" + (lOk ? "OK("+lF.getName()+")" : "FAIL(cL="+cL176+")")
+                + " tF=" + (tOk ? "OK("+tF.getName()+")" : "FAIL"));
     }
 
     private void lazyInit() {
@@ -596,12 +606,17 @@ public class ComputerScreen extends GuiContainer {
         _guiInitDone = false;
         this.searchBox   = null;
         this.tabNameField = null;
-        // super を先に呼ぶ (xSize=176 のまま → guiLeft=(w-176)/2 が設定される)
-        // その後 fixGuiFieldsPostInit() で vanilla 値を目印に正しいフィールドを特定して上書きする
+        // super実行前に全int フィールド値を記録し、実行後に変化したフィールドでguiLeft/guiTopを特定する
+        java.util.HashMap<java.lang.reflect.Field, Integer> preVals = new java.util.HashMap<>();
+        for (java.lang.reflect.Field f : net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredFields()) {
+            if (f.getType() == int.class) {
+                try { f.setAccessible(true); preVals.put(f, f.getInt(this)); } catch (Throwable ig) {}
+            }
+        }
         try { super.func_73866_w(); } catch (Throwable ig) {
             FMLLOG.warning("[TSS_PC] super.func_73866_w() threw: " + ig.getClass().getSimpleName() + ": " + ig.getMessage());
         }
-        fixGuiFieldsPostInit();
+        fixGuiFieldsPostInit(preVals);
         lazyInit();
     }
 
