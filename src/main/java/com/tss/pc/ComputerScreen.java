@@ -605,10 +605,12 @@ public class ComputerScreen extends GuiContainer {
         _guiInitDone = false;
         this.searchBox   = null;
         this.tabNameField = null;
+        // super.initGui() が xSize=176 で guiLeft=(w-176)/2 を計算するため、
+        // 事前に GuiContainer.xSize=300 に書き換えて (w-300)/2 が計算されるようにする
+        setGCSizesBeforeSuper();
         try { super.func_73866_w(); } catch (Throwable ig) {
             FMLLOG.warning("[TSS_PC] super.func_73866_w() threw: " + ig.getClass().getSimpleName() + ": " + ig.getMessage());
         }
-        // super が (w-176)/2 に設定した guiLeft/guiTop を (w-300)/2 に強制修正する
         fixAndCacheGuiLeftTop();
         lazyInit();
     }
@@ -748,10 +750,12 @@ public class ComputerScreen extends GuiContainer {
         int top = (this.height - this.ySize) / 2;
         ComputerContainer container = this.container;
 
-        // GuiContainer の guiLeft/guiTop を毎フレーム正しい値に強制設定する
-        // super.drawScreen() がこれらを使ってアイテムを描画するため確実に直す
-        try { if (_gcLeftF != null) _gcLeftF.setInt(this, left); } catch (Throwable ig) {}
-        try { if (_gcTopF  != null) _gcTopF.setInt(this, top);  } catch (Throwable ig) {}
+        // super.drawScreen() は毎フレーム guiLeft = (width - GuiContainer.xSize) / 2 を再計算する。
+        // GuiContainer.xSize を 300 に設定してから super を呼ぶことで
+        // guiLeft = (w-300)/2 が正しく計算される。guiLeft の直接書き換えは super に上書きされるため不要。
+        ensureGCFields();
+        try { if (_gcXSizeF != null) _gcXSizeF.setInt(this, this.xSize); } catch (Throwable ig) {}
+        try { if (_gcYSizeF != null) _gcYSizeF.setInt(this, this.ySize); } catch (Throwable ig) {}
 
         if (isMouseDown) {
             if (mouseX >= left + 172 && mouseX <= left + 184 && mouseY >= top + 26 && mouseY <= top + 116) {
