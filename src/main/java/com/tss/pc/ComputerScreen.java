@@ -1513,9 +1513,22 @@ public class ComputerScreen extends GuiContainer {
     // サウンド / スロット位置ユーティリティ
     // -------------------------------------------------------------------------
 
+    private static java.lang.reflect.Method _smPlayFX;
+    private static boolean _smPlayFXInit = false;
     private void playSoundFX(String name, float vol, float pitch) {
         net.minecraft.client.audio.SoundManager sm = getSndManager();
-        if (sm != null) sm.playSoundFX(name, vol, pitch);
+        if (sm == null) return;
+        if (!_smPlayFXInit) {
+            _smPlayFXInit = true;
+            for (java.lang.reflect.Method m : sm.getClass().getMethods()) {
+                Class<?>[] p = m.getParameterTypes();
+                if (p.length == 3 && p[0] == String.class && p[1] == float.class && p[2] == float.class) {
+                    try { m.setAccessible(true); } catch (Throwable ig) {}
+                    _smPlayFX = m; break;
+                }
+            }
+        }
+        if (_smPlayFX != null) try { _smPlayFX.invoke(sm, name, vol, pitch); } catch (Throwable ig) {}
     }
 
     private net.minecraft.inventory.Slot getSlotAtPositionEx(int mouseX, int mouseY) {

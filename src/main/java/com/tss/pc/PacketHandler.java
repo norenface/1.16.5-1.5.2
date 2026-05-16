@@ -19,7 +19,9 @@ public class PacketHandler implements IPacketHandler {
 
     @Override
     public void onPacketData(INetworkManager manager, Packet250CustomPayload packet, Player player) {
-        if (packet.channel.equalsIgnoreCase("tss_pc") || packet.channel.equals("TSS_PC")) {
+        // FML の @NetworkMod(channels={"TSS_PC","tss_pc"}) で既にチャンネル振り分け済み
+        // packet.channel は SRG名のためアクセス不可 → チェック不要
+        {
             EntityPlayer entityPlayer = (EntityPlayer) player;
             DataInputStream dis = new DataInputStream(new ByteArrayInputStream(packet.data));
 
