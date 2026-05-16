@@ -545,25 +545,34 @@ public class ComputerScreen extends GuiContainer {
     }
 
     /**
-     * super.initGui() 実行後に guiLeft/guiTop フィールドをキャッシュする。
-     * super が (w-300)/2 を設定した後なので値マッチングで確実に特定できる。
+     * super.initGui() 実行後に guiLeft/guiTop を強制修正する。
+     * super は xSize=176 で計算するため guiLeft=(w-176)/2 になる。
+     * これを (w-300)/2 に修正する。setGCSizesBeforeSuper が成功した場合は
+     * 既に (w-300)/2 になっているため、両方の値を検索してどちらでも対応する。
      */
-    private void cacheGuiLeftTopFields() {
+    private void fixAndCacheGuiLeftTop() {
         syncGuiFields();
-        int expL = (this.width  - this.xSize) / 2;
-        int expT = (this.height - this.ySize) / 2;
+        int wrongLeft   = (this.width  - 176) / 2;   // super が設定する誤値
+        int wrongTop    = (this.height - 166) / 2;
+        int correctLeft = (this.width  - this.xSize) / 2;   // (w-300)/2 が正しい値
+        int correctTop  = (this.height - this.ySize) / 2;
         if (_gcLeftF == null || _gcTopF == null) {
             for (java.lang.reflect.Field f : net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredFields()) {
                 if (f.getType() != int.class) continue;
                 try {
                     f.setAccessible(true);
                     int v = f.getInt(this);
-                    if (_gcLeftF == null && v == expL) { _gcLeftF = f; }
-                    else if (_gcTopF == null && v == expT) { _gcTopF = f; }
+                    // 誤値でも正値でもどちらでも guiLeft/guiTop フィールドとして認識する
+                    if (_gcLeftF == null && (v == wrongLeft || v == correctLeft)) { _gcLeftF = f; }
+                    else if (_gcTopF == null && (v == wrongTop || v == correctTop)) { _gcTopF = f; }
                 } catch (Throwable ig) {}
             }
         }
-        FMLLOG.warning("[TSS_PC] cacheGuiLeftTop: w=" + this.width + " expL=" + expL + " expT=" + expT
+        try { if (_gcLeftF != null) _gcLeftF.setInt(this, correctLeft); } catch (Throwable ig) {}
+        try { if (_gcTopF  != null) _gcTopF.setInt(this, correctTop);  } catch (Throwable ig) {}
+        FMLLOG.warning("[TSS_PC] fixGuiLeftTop: w=" + this.width + " h=" + this.height
+                + " wrong=" + wrongLeft + "/" + wrongTop
+                + " correct=" + correctLeft + "/" + correctTop
                 + " lF=" + (_gcLeftF != null ? _gcLeftF.getName() : "MISS")
                 + " tF=" + (_gcTopF  != null ? _gcTopF.getName()  : "MISS"));
     }
@@ -596,14 +605,11 @@ public class ComputerScreen extends GuiContainer {
         _guiInitDone = false;
         this.searchBox   = null;
         this.tabNameField = null;
-        // super が guiLeft = (w - xSize) / 2 を計算する前に xSize=300, ySize=222 を設定する
-        // これにより super が正しい guiLeft/guiTop を自動計算する
-        setGCSizesBeforeSuper();
         try { super.func_73866_w(); } catch (Throwable ig) {
             FMLLOG.warning("[TSS_PC] super.func_73866_w() threw: " + ig.getClass().getSimpleName() + ": " + ig.getMessage());
         }
-        // super が計算した guiLeft/guiTop フィールドをキャッシュする (per-frame 補正用)
-        cacheGuiLeftTopFields();
+        // super が (w-176)/2 に設定した guiLeft/guiTop を (w-300)/2 に強制修正する
+        fixAndCacheGuiLeftTop();
         lazyInit();
     }
 
