@@ -105,6 +105,16 @@ public class ComputerContainer extends Container {
 
         // デバッグ用：スロットがいくつ登録されたかコンソールに出す
         System.out.println("DEBUG: Container initialized. Total slots: " + _ownSlots.size());
+        // vanilla inventorySlotsリストのサイズも確認（リフレクション追加が成功しているか）
+        try {
+            java.lang.reflect.Field f = net.minecraft.inventory.Container.class.getDeclaredField("field_75151_b");
+            f.setAccessible(true);
+            java.util.List<?> vanillaList = (java.util.List<?>) f.get(this);
+            System.out.println("DEBUG: vanilla inventorySlots size: " + vanillaList.size());
+        } catch (Throwable t) {
+            // フィールド名が違う場合は無視
+            System.out.println("DEBUG: vanilla inventorySlots check skipped: " + t.getClass().getSimpleName());
+        }
         // 最初の表示を更新
         updateVisibleSlots();
     }
@@ -318,11 +328,20 @@ public class ComputerContainer extends Container {
 
     @Override
     public void func_75142_b() {
-        // 🌟 先に表示を更新してから親の処理を呼ぶ
-        if (!this.player.field_70170_p.field_72995_K) {
-            this.updateVisibleSlots();
+        try {
+            if (!this.player.field_70170_p.field_72995_K) {
+                this.updateVisibleSlots();
+            }
+        } catch (Throwable t) {
+            System.err.println("[TSS_PC] func_75142_b updateVisibleSlots ERROR: " + t);
+            t.printStackTrace();
         }
-        super.func_75142_b();
+        try {
+            super.func_75142_b();
+        } catch (Throwable t) {
+            System.err.println("[TSS_PC] func_75142_b super ERROR: " + t);
+            t.printStackTrace();
+        }
     }
 
     private void handleWithdraw(int slotId, int amount, EntityPlayer player) {
