@@ -502,12 +502,16 @@ public class ComputerScreen extends GuiContainer {
     private static void ensureGCFields() {
         if (_gcFieldsInitialized) return;
         _gcFieldsInitialized = true;
-        // MCP名で試みる (Forge がMCP名を保持する場合に確実)
+        // MCP名で試みる（開発環境では有効）
         _gcXSizeF = gcTryName("xSize");
         _gcYSizeF = gcTryName("ySize");
         _gcLeftF  = gcTryName("guiLeft");
         _gcTopF   = gcTryName("guiTop");
-        // 全 int フィールドをデバッグログに出力 (インデックスフォールバックは廃止)
+        // SRG名でも試みる（本番jar用。ログから確認済みのフィールド名）
+        if (_gcXSizeF == null) _gcXSizeF = gcTryName("field_74194_b");
+        if (_gcYSizeF == null) _gcYSizeF = gcTryName("field_74195_c");
+        // guiLeft / guiTop は value-based scan で対応（SRG名不明のため）
+        // 全 int フィールドをデバッグログに出力
         StringBuilder sb = new StringBuilder("[TSS_PC] GC int fields:");
         for (java.lang.reflect.Field f : net.minecraft.client.gui.inventory.GuiContainer.class.getDeclaredFields()) {
             if (f.getType() == int.class) { try { f.setAccessible(true); } catch (Throwable ig) {} sb.append(" ").append(f.getName()); }
@@ -1055,13 +1059,19 @@ public class ComputerScreen extends GuiContainer {
     @Override
     protected void handleMouseClick(net.minecraft.inventory.Slot slot, int slotId, int mouseButton, int mode) {
         if (mode == 1 && slotId >= 90) {
+            // シフトクリックでプレイヤーインベントリアイテムを預け入れ
+            // コンテナSlotIndex(90-125)→実インベントリIndex(0-35)に変換
             if (slot != null) {
-                sendActionPacket(6, slotNum(slot));
+                // スロット90-116: new Slot(invPlayer, i+9, ...) → invIdx = slotId - 81
+                // スロット117-125: new Slot(invPlayer, i, ...) → invIdx = slotId - 117
+                int invIdx = (slotId >= 117) ? (slotId - 117) : (slotId - 81);
+                sendActionPacket(6, invIdx);
             } else {
                 if (MCHelper.invGetItemStack(this.thePlayer.field_71071_by) != null) {
                     sendActionPacket(6, -999);
                 }
             }
+            return; // super.handleMouseClickへの落下を防ぐ（二重windowClick送信を回避）
         }
 
         if (slotId < 0) {
@@ -1072,7 +1082,8 @@ public class ComputerScreen extends GuiContainer {
         if (slotId >= 0 && slotId < 45) {
             net.minecraft.item.ItemStack heldStack = MCHelper.invGetItemStack(this.thePlayer.field_71071_by);
             if (heldStack != null) {
-                this.sendComputerPacket(6, 0, slotId, heldStack, 0);
+                // カーソルアイテムを預け入れ（-999=カーソルアイテムを示す）
+                sendActionPacket(6, -999);
                 return;
             }
             if (slot != null && slotHasStack(slot)) {
