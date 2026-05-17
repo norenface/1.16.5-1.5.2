@@ -16,25 +16,10 @@ public class ComputerContainer extends Container {
     private ComputerBlockEntity tileEntity;
     private final EntityPlayer player;
 
-    // Container の List<Slot> フィールドは SRG 名が不明なため、
-    // 独自リストで全スロットを管理してリフレクション依存を排除する
+    // 独自スロットリスト (表示・クリック処理用)
     private final ArrayList<Slot> _ownSlots = new ArrayList<Slot>();
 
-    // ランタイムでのaddSlotToContainerメソッドを動的に検索する
-    private static java.lang.reflect.Method containerAddSlot;
-    static {
-        for (java.lang.reflect.Method m : net.minecraft.inventory.Container.class.getDeclaredMethods()) {
-            Class<?>[] p = m.getParameterTypes();
-            if (p.length == 1 && net.minecraft.inventory.Slot.class.isAssignableFrom(p[0])) {
-                try { m.setAccessible(true); } catch (Exception e) {}
-                containerAddSlot = m;
-                System.out.println("DEBUG: Found addSlotToContainer: " + m.getName());
-                break;
-            }
-        }
-    }
-
-    /** 独自スロットリストを返す（SRG名問題を完全に回避） */
+    /** 独自スロットリストを返す */
     public List<Slot> getSlots() {
         return _ownSlots;
     }
@@ -42,16 +27,11 @@ public class ComputerContainer extends Container {
     private void addSlot(Slot slot) {
         int idx = _ownSlots.size();
         _ownSlots.add(slot);
-        // slotNumber は Forge が追加したフィールドで MCP 名のまま → 直接書き込み可
-        // (SRG変換されない。NoSuchFieldError が来ても catch(Throwable) で保護)
+        // slotNumber は Forge-added フィールドで MCP名のまま
         try { slot.slotNumber = idx; } catch (Throwable ig) {}
-        // Container の内部リストにも登録（バニラ描画・detectAndSendChanges のため）
-        if (containerAddSlot != null) {
-            try { containerAddSlot.invoke(this, slot); return; } catch (Exception e) {
-                System.err.println("DEBUG: addSlot reflection failed: " + e.getMessage());
-            }
-        }
-        try { this.field_75151_b.add(slot); } catch (Throwable ignored) {}
+        // field_75151_b = Container.inventorySlots (SRG名, public)
+        // バニラのdetectAndSendChanges・getSlot等が正しく動作するために必須
+        this.field_75151_b.add(slot);
     }
 
     // スクロール・フィルタ状態 (Screenから更新される)
@@ -103,19 +83,7 @@ public class ComputerContainer extends Container {
             this.addSlot(new Slot(invPlayer, i, i * 18, 198));
         }
 
-        // デバッグ用：スロットがいくつ登録されたかコンソールに出す
-        System.out.println("DEBUG: Container initialized. Total slots: " + _ownSlots.size());
-        // vanilla inventorySlotsリストのサイズも確認（リフレクション追加が成功しているか）
-        try {
-            java.lang.reflect.Field f = net.minecraft.inventory.Container.class.getDeclaredField("field_75151_b");
-            f.setAccessible(true);
-            java.util.List<?> vanillaList = (java.util.List<?>) f.get(this);
-            System.out.println("DEBUG: vanilla inventorySlots size: " + vanillaList.size());
-        } catch (Throwable t) {
-            // フィールド名が違う場合は無視
-            System.out.println("DEBUG: vanilla inventorySlots check skipped: " + t.getClass().getSimpleName());
-        }
-        // 最初の表示を更新
+        System.out.println("DEBUG: Container initialized. ownSlots=" + _ownSlots.size() + " vanillaSlots=" + this.field_75151_b.size());
         updateVisibleSlots();
     }
     // 🌟 最小限の追加：Screenからの状態（スクロール等）を同期するメソッド

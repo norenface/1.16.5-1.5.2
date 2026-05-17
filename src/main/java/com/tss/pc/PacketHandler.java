@@ -17,13 +17,30 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.CompressedStreamTools;
 public class PacketHandler implements IPacketHandler {
 
+    // packet.data は本番jarでSRG名に変換されているためリフレクションでアクセス
+    private static java.lang.reflect.Field _p250Data;
+    static {
+        for (java.lang.reflect.Field f : Packet250CustomPayload.class.getDeclaredFields()) {
+            if (f.getType() == byte[].class) {
+                try { f.setAccessible(true); } catch (Throwable ig) {}
+                _p250Data = f;
+                break;
+            }
+        }
+    }
+
+    private static byte[] getPacketData(Packet250CustomPayload packet) {
+        if (_p250Data != null) {
+            try { return (byte[]) _p250Data.get(packet); } catch (Throwable ig) {}
+        }
+        try { return packet.data; } catch (Throwable ig) { return new byte[0]; }
+    }
+
     @Override
     public void onPacketData(INetworkManager manager, Packet250CustomPayload packet, Player player) {
-        // FML の @NetworkMod(channels={"TSS_PC","tss_pc"}) で既にチャンネル振り分け済み
-        // packet.channel は SRG名のためアクセス不可 → チェック不要
         {
             EntityPlayer entityPlayer = (EntityPlayer) player;
-            DataInputStream dis = new DataInputStream(new ByteArrayInputStream(packet.data));
+            DataInputStream dis = new DataInputStream(new ByteArrayInputStream(getPacketData(packet)));
 
             try {
                 int packetId = dis.readByte();
