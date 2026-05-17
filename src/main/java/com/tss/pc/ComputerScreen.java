@@ -970,7 +970,17 @@ public class ComputerScreen extends GuiContainer {
             }
         }
 
-        super.func_73864_a(mouseX, mouseY, button);
+        // super.func_73864_a() は呼ばない。
+        // GuiContainer.mouseClicked() は内部の guiLeft を使ってスロット検出するため
+        // guiLeft がズレるとクラッシュ or 誤動作の原因になる。
+        // プレイヤーインベントリ (90+) のクリックは自前で処理する。
+        Slot playerSlot = this.getSlotAtPositionEx(mouseX, mouseY);
+        if (playerSlot != null && slotNum(playerSlot) >= 90) {
+            int pid = slotNum(playerSlot);
+            boolean isShift = org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_LSHIFT)
+                    || org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_RSHIFT);
+            handleMouseClick(playerSlot, pid, button, isShift ? 1 : 0);
+        }
     }
 
     private void sendTabPacket(int actionType, int index) {
